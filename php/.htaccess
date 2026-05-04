@@ -1,0 +1,26 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /php/
+
+    # Don't rewrite existing files and directories
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+
+    # Rewrite to index.php
+    RewriteRule ^(.*)$ public/index.php?path=$1 [QSA,L]
+</IfModule>
+
+# Disable directory listing
+Options -Indexes
+
+# Protect config files
+<FilesMatch "\.php$">
+    <If "%{REQUEST_URI} =~ m#^/config#">
+        Deny from all
+    </If>
+</FilesMatch>
+
+# Security Headers
+Header set X-Content-Type-Options "nosniff"
+Header set X-Frame-Options "SAMEORIGIN"
+Header set X-XSS-Protection "1; mode=block"

@@ -1,0 +1,6 @@
+{
+  "name": "CAMPUSNEST",
+  "description": "A comprehensive student housing platform connecting students with verified landlords, featuring real-time messaging, booking management, and specialized dashboards for students, landlords, and administrators.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": []
+}

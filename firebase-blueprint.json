@@ -1,0 +1,141 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "department": { "type": "string" },
+        "matricNumber": { "type": "string" },
+        "level": { "type": "string" },
+        "institution": { "type": "string" },
+        "role": { "type": "string", "enum": ["student", "landlord", "admin", "committee"] },
+        "isVerified": { "type": "boolean" },
+        "verificationStatus": { "type": "string", "enum": ["unverified", "pending", "verified", "rejected"] },
+        "verificationData": {
+          "type": "object",
+          "properties": {
+            "idNumber": { "type": "string" },
+            "idDocumentUrl": { "type": "string" },
+            "proofOfResidenceUrl": { "type": "string" },
+            "submittedAt": { "type": "string", "format": "date-time" }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Property": {
+      "title": "Property",
+      "description": "Property listing details",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "location": { "type": "string" },
+        "address": { "type": "string" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "amenities": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["pending", "verified", "rejected"] },
+        "verificationStats": { "type": "string" },
+        "isBooked": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "title", "price", "location"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Property booking details",
+      "type": "object",
+      "properties": {
+        "propertyId": { "type": "string" },
+        "studentId": { "type": "string" },
+        "landlordId": { "type": "string" },
+        "startDate": { "type": "string", "format": "date-time" },
+        "duration": { "type": "number" },
+        "totalPrice": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "cancelled", "paid"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["propertyId", "studentId", "landlordId", "totalPrice"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Chat message",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "content": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["chatId", "senderId", "content"]
+    },
+    "Call": {
+      "title": "Call",
+      "description": "WebRTC Call signaling session",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string" },
+        "callerId": { "type": "string" },
+        "calleeId": { "type": "string" },
+        "status": { "type": "string", "enum": ["ringing", "connected", "ended"] },
+        "offer": { "type": "object" },
+        "answer": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["chatId", "callerId", "status"]
+    },
+    "Review": {
+      "title": "Platform Review",
+      "description": "User feedback for the platform",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "rating", "comment", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "properties/{propertyId}": {
+      "schema": "Property",
+      "description": "Property listings"
+    },
+    "bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Property bookings"
+    },
+    "chats/{chatId}": {
+      "schema": "object",
+      "description": "Chat sessions"
+    },
+    "chats/{chatId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Messages within a chat"
+    },
+    "calls/{callId}": {
+      "schema": "Call",
+      "description": "Call signaling sessions"
+    },
+    "reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Global platform reviews"
+    }
+  }
+}
