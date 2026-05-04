@@ -9,8 +9,8 @@ require_once __DIR__ . '/env.php';
  * or an untracked .env file.
  */
 
-define('PAYSTACK_SECRET_KEY', getenv('PAYSTACK_SECRET_KEY') ?: '');
-define('PAYSTACK_PUBLIC_KEY', getenv('PAYSTACK_PUBLIC_KEY') ?: '');
+define('PAYSTACK_SECRET_KEY', trim(getenv('PAYSTACK_SECRET_KEY') ?: ''));
+define('PAYSTACK_PUBLIC_KEY', trim(getenv('PAYSTACK_PUBLIC_KEY') ?: ''));
 define('PAYSTACK_CURRENCY', 'NGN');
 
 function isPaystackConfigured()

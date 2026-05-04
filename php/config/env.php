@@ -23,7 +23,9 @@ function loadEnv($path = null)
         [$key, $value] = array_map('trim', explode('=', $line, 2));
         $value = trim($value, "\"'");
 
-        if ($key !== '' && getenv($key) === false) {
+        $existingValue = getenv($key);
+
+        if ($key !== '' && ($existingValue === false || $existingValue === '')) {
             putenv($key . '=' . $value);
             $_ENV[$key] = $value;
             $_SERVER[$key] = $value;

@@ -11,15 +11,15 @@ require_once __DIR__ . '/env.php';
 
 return [
     'google' => [
-        'client_id' => getenv('GOOGLE_CLIENT_ID') ?: '',
-        'client_secret' => getenv('GOOGLE_CLIENT_SECRET') ?: '',
+        'client_id' => trim(getenv('GOOGLE_CLIENT_ID') ?: ''),
+        'client_secret' => trim(getenv('GOOGLE_CLIENT_SECRET') ?: ''),
     ],
     'apple' => [
-        'client_id' => getenv('APPLE_CLIENT_ID') ?: '',
-        'client_secret' => getenv('APPLE_CLIENT_SECRET') ?: '',
+        'client_id' => trim(getenv('APPLE_CLIENT_ID') ?: ''),
+        'client_secret' => trim(getenv('APPLE_CLIENT_SECRET') ?: ''),
     ],
     'github' => [
-        'client_id' => getenv('GITHUB_CLIENT_ID') ?: '',
-        'client_secret' => getenv('GITHUB_CLIENT_SECRET') ?: '',
+        'client_id' => trim(getenv('GITHUB_CLIENT_ID') ?: ''),
+        'client_secret' => trim(getenv('GITHUB_CLIENT_SECRET') ?: ''),
     ],
 ];
