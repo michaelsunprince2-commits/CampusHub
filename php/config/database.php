@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/env.php';
+
 /**
  * Database Configuration
  * 
@@ -7,11 +9,11 @@
  */
 
 // Database configuration
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', ''); // Change this to your MySQL password
-define('DB_NAME', 'campusnest');
-define('DB_PORT', 3306);
+define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
+define('DB_USER', getenv('DB_USER') ?: 'root');
+define('DB_PASS', getenv('DB_PASS') ?: '');
+define('DB_NAME', getenv('DB_NAME') ?: 'campusnest');
+define('DB_PORT', getenv('DB_PORT') ?: 3306);
 
 // Create connection
 $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
@@ -28,7 +30,7 @@ if ($conn->connect_error) {
 $conn->set_charset("utf8mb4");
 
 // Define error handling
-define('ENVIRONMENT', 'development'); // 'production' or 'development'
+define('ENVIRONMENT', getenv('ENVIRONMENT') ?: 'development');
 
 if (ENVIRONMENT === 'production') {
     error_reporting(0);
