@@ -184,4 +184,129 @@ class User
 
         return ['success' => false, 'message' => 'Verification failed'];
     }
+
+    public function createPasswordResetToken($email)
+    {
+        $email = filter_var(trim($email), FILTER_SANITIZE_EMAIL);
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return null;
+        }
+
+        $stmt = $this->conn->prepare("SELECT id, first_name FROM users WHERE email = ?");
+        $stmt->bind_param("s", $email);
+        $stmt->execute();
+        $user = $stmt->get_result()->fetch_assoc();
+
+        if (!$user) {
+            return null;
+        }
+
+        $this->ensurePasswordResetTable();
+        $this->expireUserPasswordResetTokens((int)$user['id']);
+
+        $token = bin2hex(random_bytes(32));
+        $tokenHash = hash('sha256', $token);
+        $expiresAt = date('Y-m-d H:i:s', strtotime('+1 hour'));
+
+        $stmt = $this->conn->prepare("INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, ?)");
+        $stmt->bind_param("iss", $user['id'], $tokenHash, $expiresAt);
+
+        if (!$stmt->execute()) {
+            return null;
+        }
+
+        return [
+            'email' => $email,
+            'first_name' => $user['first_name'],
+            'token' => $token,
+            'expires_at' => $expiresAt,
+        ];
+    }
+
+    public function getValidPasswordReset($token)
+    {
+        $tokenHash = hash('sha256', trim((string)$token));
+        $this->ensurePasswordResetTable();
+
+        $stmt = $this->conn->prepare("
+            SELECT pr.id, pr.user_id, u.email, u.first_name
+            FROM password_resets pr
+            INNER JOIN users u ON u.id = pr.user_id
+            WHERE pr.token_hash = ?
+              AND pr.used_at IS NULL
+              AND pr.expires_at > NOW()
+            LIMIT 1
+        ");
+        $stmt->bind_param("s", $tokenHash);
+        $stmt->execute();
+
+        return $stmt->get_result()->fetch_assoc();
+    }
+
+    public function resetPassword($token, $password)
+    {
+        if (!is_string($password) || strlen($password) < 8) {
+            return ['success' => false, 'message' => 'Password must be at least 8 characters'];
+        }
+
+        $reset = $this->getValidPasswordReset($token);
+
+        if (!$reset) {
+            return ['success' => false, 'message' => 'This reset link is invalid or has expired'];
+        }
+
+        $passwordHash = password_hash($password, PASSWORD_BCRYPT);
+        $userId = (int)$reset['user_id'];
+        $resetId = (int)$reset['id'];
+        $usedAt = date('Y-m-d H:i:s');
+
+        $this->conn->begin_transaction();
+
+        try {
+            $stmt = $this->conn->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
+            $stmt->bind_param("si", $passwordHash, $userId);
+            $stmt->execute();
+
+            $stmt = $this->conn->prepare("UPDATE password_resets SET used_at = ? WHERE id = ?");
+            $stmt->bind_param("si", $usedAt, $resetId);
+            $stmt->execute();
+
+            $stmt = $this->conn->prepare("DELETE FROM sessions WHERE user_id = ?");
+            $stmt->bind_param("i", $userId);
+            $stmt->execute();
+
+            $this->conn->commit();
+        } catch (Throwable $error) {
+            $this->conn->rollback();
+            return ['success' => false, 'message' => 'Unable to reset password. Please try again.'];
+        }
+
+        return ['success' => true, 'message' => 'Password reset successful. You can now log in.'];
+    }
+
+    private function expireUserPasswordResetTokens($userId)
+    {
+        $stmt = $this->conn->prepare("UPDATE password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL");
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+    }
+
+    private function ensurePasswordResetTable()
+    {
+        $this->conn->query("
+            CREATE TABLE IF NOT EXISTS password_resets (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                user_id INT NOT NULL,
+                token_hash VARCHAR(64) NOT NULL UNIQUE,
+                expires_at TIMESTAMP NOT NULL,
+                used_at TIMESTAMP NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_token_hash (token_hash),
+                INDEX idx_user (user_id),
+                INDEX idx_expires (expires_at)
+            )
+        ");
+    }
 }

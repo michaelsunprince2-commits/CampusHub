@@ -212,6 +212,10 @@ require_once '../templates/header.php';
             <input type="password" id="password" name="password" required>
         </div>
 
+        <div class="auth-link" style="text-align: right; margin-top: -0.35rem; margin-bottom: 1rem;">
+            <a href="<?php echo pageUrl('forgot-password.php'); ?>">Forgot password?</a>
+        </div>
+
         <div class="form-group">
             <button type="submit" class="btn">Login</button>
         </div>

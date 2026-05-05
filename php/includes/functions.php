@@ -242,6 +242,12 @@ function paginate($totalItems, $perPage = 10, $page = 1)
  */
 function getBaseUrl()
 {
+    $configuredUrl = trim(getenv('APP_URL') ?: '');
+
+    if ($configuredUrl !== '' && $configuredUrl !== 'MY_APP_URL') {
+        return rtrim($configuredUrl, '/');
+    }
+
     $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     $host = $_SERVER['HTTP_HOST'];
     $scriptDir = dirname($_SERVER['SCRIPT_NAME']);

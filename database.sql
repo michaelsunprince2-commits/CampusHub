@@ -207,6 +207,20 @@ CREATE TABLE sessions (
   INDEX idx_expires (expires_at)
 );
 
+-- Password Reset Tokens
+CREATE TABLE password_resets (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  token_hash VARCHAR(64) NOT NULL UNIQUE,
+  expires_at TIMESTAMP NOT NULL,
+  used_at TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_token_hash (token_hash),
+  INDEX idx_user (user_id),
+  INDEX idx_expires (expires_at)
+);
+
 -- Audit Log Table
 CREATE TABLE audit_logs (
   id INT PRIMARY KEY AUTO_INCREMENT,
