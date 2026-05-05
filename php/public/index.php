@@ -418,7 +418,7 @@ require_once '../templates/header.php';
         </div>
 
         <div class="testimonial-card">
-            <div class="ambassador-avatar female"><img src="../assets/female2.jpg" alt="Sophia Williams"></div>
+            <div class="ambassador-avatar female"><img src="../public/assets/female2.jpg" alt="Sophia Williams"></div>
             <div class="ambassador-name">Sophia Williams</div>
             <div class="ambassador-title">Junior @ Tech Institute</div>
             <div class="testimonial-stars">⭐⭐⭐⭐⭐</div>
@@ -429,7 +429,7 @@ require_once '../templates/header.php';
         </div>
 
         <div class="testimonial-card">
-            <div class="ambassador-avatar female"><img src="../assets/female3.jpg" alt="Emma Rodriguez"></div>
+            <div class="ambassador-avatar female"><img src="../public/assets/female3.jpg" alt="Emma Rodriguez"></div>
             <div class="ambassador-name">Emma Rodriguez</div>
             <div class="ambassador-title">Sophomore @ Arts University</div>
             <div class="testimonial-stars">⭐⭐⭐⭐⭐</div>
