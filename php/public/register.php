@@ -94,6 +94,35 @@ require_once '../templates/header.php';
             background: #fbfcfd;
         }
 
+        .password-field {
+            position: relative;
+        }
+
+        .password-field input {
+            width: 100%;
+            padding-right: 4.75rem;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 0.6rem;
+            top: 50%;
+            transform: translateY(-50%);
+            border: 0;
+            background: transparent;
+            color: #1f6f78;
+            cursor: pointer;
+            font: inherit;
+            font-size: 0.9rem;
+            font-weight: 700;
+            padding: 0.25rem;
+        }
+
+        .password-toggle:focus {
+            outline: 2px solid rgba(31, 111, 120, 0.25);
+            border-radius: 4px;
+        }
+
         .form-group button {
             width: 100%;
             padding: 0.85rem 1rem;
@@ -221,12 +250,18 @@ require_once '../templates/header.php';
         <div class="auth-form-row">
             <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" name="password" required>
+                <div class="password-field">
+                    <input type="password" id="password" name="password" required>
+                    <button type="button" class="password-toggle" data-password-toggle="password" aria-label="Show password">Show</button>
+                </div>
             </div>
 
             <div class="form-group">
                 <label for="confirm_password">Confirm Password</label>
-                <input type="password" id="confirm_password" name="confirm_password" required>
+                <div class="password-field">
+                    <input type="password" id="confirm_password" name="confirm_password" required>
+                    <button type="button" class="password-toggle" data-password-toggle="confirm_password" aria-label="Show confirm password">Show</button>
+                </div>
             </div>
         </div>
 
@@ -242,5 +277,18 @@ require_once '../templates/header.php';
         Already have an account? <a href="<?php echo pageUrl('login.php'); ?>">Login here</a>
     </div>
 </div>
+
+<script>
+    document.querySelectorAll('[data-password-toggle]').forEach(function(button) {
+        button.addEventListener('click', function() {
+            const input = document.getElementById(button.dataset.passwordToggle);
+            const isHidden = input.type === 'password';
+
+            input.type = isHidden ? 'text' : 'password';
+            button.textContent = isHidden ? 'Hide' : 'Show';
+            button.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+        });
+    });
+</script>
 
 <?php require_once '../templates/footer.php'; ?>
