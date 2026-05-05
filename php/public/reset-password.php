@@ -101,27 +101,50 @@ require_once '../templates/header.php';
         }
 
         .password-field input {
-            padding-right: 4.75rem;
+            padding-right: 3.1rem;
         }
 
         .password-toggle {
             position: absolute;
-            right: 0.6rem;
+            right: 0.55rem;
             top: 50%;
             transform: translateY(-50%);
             border: 0;
             background: transparent;
             color: #1f6f78;
             cursor: pointer;
-            font: inherit;
-            font-size: 0.9rem;
-            font-weight: 700;
-            padding: 0.25rem;
+            display: grid;
+            place-items: center;
+            width: 2.1rem;
+            height: 2.1rem;
+            padding: 0;
+            border-radius: 999px;
+        }
+
+        .password-toggle:hover {
+            background: #eaf4f6;
+        }
+
+        .password-toggle svg {
+            width: 1.2rem;
+            height: 1.2rem;
+            stroke: currentColor;
+        }
+
+        .password-toggle .icon-eye-off {
+            display: none;
+        }
+
+        .password-toggle.is-visible .icon-eye {
+            display: none;
+        }
+
+        .password-toggle.is-visible .icon-eye-off {
+            display: block;
         }
 
         .password-toggle:focus {
             outline: 2px solid rgba(31, 111, 120, 0.25);
-            border-radius: 4px;
         }
 
         .form-group button {
@@ -164,7 +187,18 @@ require_once '../templates/header.php';
                 <label for="password">New Password</label>
                 <div class="password-field">
                     <input type="password" id="password" name="password" required minlength="8">
-                    <button type="button" class="password-toggle" data-password-toggle="password" aria-label="Show password">Show</button>
+                    <button type="button" class="password-toggle" data-password-toggle="password" aria-label="Show password">
+                        <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+                            <circle cx="12" cy="12" r="3" />
+                        </svg>
+                        <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M9.9 4.2A10.5 10.5 0 0 1 12 4c6.5 0 10 8 10 8a18.1 18.1 0 0 1-3.1 4.5" />
+                            <path d="M14.1 14.1A3 3 0 0 1 9.9 9.9" />
+                            <path d="M3 3l18 18" />
+                            <path d="M6.6 6.6C3.7 8.6 2 12 2 12s3.5 8 10 8a10.3 10.3 0 0 0 4.1-.8" />
+                        </svg>
+                    </button>
                 </div>
             </div>
 
@@ -172,7 +206,18 @@ require_once '../templates/header.php';
                 <label for="confirm_password">Confirm New Password</label>
                 <div class="password-field">
                     <input type="password" id="confirm_password" name="confirm_password" required minlength="8">
-                    <button type="button" class="password-toggle" data-password-toggle="confirm_password" aria-label="Show confirm password">Show</button>
+                    <button type="button" class="password-toggle" data-password-toggle="confirm_password" aria-label="Show confirm password">
+                        <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+                            <circle cx="12" cy="12" r="3" />
+                        </svg>
+                        <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M9.9 4.2A10.5 10.5 0 0 1 12 4c6.5 0 10 8 10 8a18.1 18.1 0 0 1-3.1 4.5" />
+                            <path d="M14.1 14.1A3 3 0 0 1 9.9 9.9" />
+                            <path d="M3 3l18 18" />
+                            <path d="M6.6 6.6C3.7 8.6 2 12 2 12s3.5 8 10 8a10.3 10.3 0 0 0 4.1-.8" />
+                        </svg>
+                    </button>
                 </div>
             </div>
 
@@ -194,7 +239,7 @@ require_once '../templates/header.php';
             const isHidden = input.type === 'password';
 
             input.type = isHidden ? 'text' : 'password';
-            button.textContent = isHidden ? 'Hide' : 'Show';
+            button.classList.toggle('is-visible', isHidden);
             button.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
         });
     });
