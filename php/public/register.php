@@ -113,7 +113,7 @@ require_once '../templates/header.php';
             color: #1f6f78;
             cursor: pointer;
             display: grid;
-            place-items: center;
+            place-items: left;
             width: 2.1rem;
             height: 2.1rem;
             padding: 0;
@@ -146,7 +146,7 @@ require_once '../templates/header.php';
             outline: 2px solid rgba(31, 111, 120, 0.25);
         }
 
-        .form-group button {
+        .form-group button:not(.password-toggle) {
             width: 100%;
             padding: 0.85rem 1rem;
             border-radius: 6px;
