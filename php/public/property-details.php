@@ -24,6 +24,36 @@ if (!$propertyData) {
     exit();
 }
 
+$reviewError = '';
+$reviewSuccess = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submit_property_review') {
+    if (!isAuthenticated() || getCurrentUserRole() !== 'student') {
+        $reviewError = 'Only students can review properties.';
+    } else {
+        $rating = sanitizeInt($_POST['rating'] ?? 0, 0);
+        $title = sanitizeString($_POST['title'] ?? '', 255);
+        $comment = sanitizeInput($_POST['comment'] ?? '');
+
+        if ($rating < 1 || $rating > 5) {
+            $reviewError = 'Please select a rating between 1 and 5 stars.';
+        } elseif ($title === '') {
+            $reviewError = 'Please enter a review title.';
+        } elseif ($comment === '') {
+            $reviewError = 'Please write a short review.';
+        } else {
+            $result = $review->create($propertyData['id'], getCurrentUserId(), $rating, $title, $comment);
+
+            if ($result['success']) {
+                $reviewSuccess = 'Thank you. Your review has been added.';
+                $propertyData = $property->getById((int)$_GET['id']);
+            } else {
+                $reviewError = $result['message'];
+            }
+        }
+    }
+}
+
 $reviews = $review->getPropertyReviews($propertyData['id'], 10, 0);
 
 require_once '../templates/header.php';
@@ -53,12 +83,61 @@ require_once '../templates/header.php';
         justify-content: center;
         font-size: 3rem;
         overflow: hidden;
+        border: 0;
+        cursor: pointer;
+        padding: 0;
     }
 
     .property-image img {
         width: 100%;
         height: 100%;
         object-fit: cover;
+    }
+
+    .image-lightbox {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        background: rgba(0, 0, 0, 0.86);
+    }
+
+    .image-lightbox.active {
+        display: flex;
+    }
+
+    .image-lightbox img {
+        max-width: 95vw;
+        max-height: 88vh;
+        object-fit: contain;
+        border-radius: 8px;
+        background: #111;
+    }
+
+    .lightbox-close {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        width: 44px;
+        height: 44px;
+        border: 0;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.94);
+        color: #2c3e50;
+        cursor: pointer;
+        font-size: 1.7rem;
+        line-height: 1;
+    }
+
+    .property-video {
+        width: 100%;
+        margin-top: 1.5rem;
+        border-radius: 8px;
+        background: #000;
+        max-height: 460px;
     }
 
     .property-info {
@@ -167,6 +246,41 @@ require_once '../templates/header.php';
     .review-rating {
         color: #f39c12;
     }
+
+    .review-form {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        margin: 2rem 0;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .review-form .form-group {
+        margin-bottom: 1rem;
+    }
+
+    .review-form label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: #2c3e50;
+    }
+
+    .review-form input,
+    .review-form select,
+    .review-form textarea {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 1rem;
+    }
+
+    .review-form textarea {
+        min-height: 110px;
+        resize: vertical;
+    }
 </style>
 
 <div class="property-header">
@@ -187,9 +301,9 @@ require_once '../templates/header.php';
             if (is_array($images)) {
                 foreach (array_slice($images, 0, 4) as $image):
             ?>
-                    <div class="property-image">
+                    <button type="button" class="property-image" onclick="openImageLightbox('<?php echo htmlspecialchars($image, ENT_QUOTES); ?>')" aria-label="View full property image">
                         <img src="<?php echo htmlspecialchars($image); ?>" alt="Property image">
-                    </div>
+                    </button>
                 <?php endforeach;
             } else {
                 for ($i = 0; $i < 4; $i++):
@@ -199,6 +313,14 @@ require_once '../templates/header.php';
             }
             ?>
         </div>
+
+        <?php if (!empty($propertyData['video_url'])): ?>
+            <h2 style="margin-top: 2rem;">Interior Video</h2>
+            <video class="property-video" controls preload="metadata">
+                <source src="<?php echo htmlspecialchars($propertyData['video_url']); ?>">
+                Your browser does not support the video tag.
+            </video>
+        <?php endif; ?>
 
         <h2 style="margin-top: 2rem;">Description</h2>
         <p><?php echo nl2br(htmlspecialchars($propertyData['description'])); ?></p>
@@ -221,6 +343,49 @@ require_once '../templates/header.php';
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
+
+        <div class="review-form">
+            <h2>Rate This Property</h2>
+
+            <?php if ($reviewError): ?>
+                <div class="alert alert-error"><?php echo htmlspecialchars($reviewError); ?></div>
+            <?php endif; ?>
+
+            <?php if ($reviewSuccess): ?>
+                <div class="alert alert-success"><?php echo htmlspecialchars($reviewSuccess); ?></div>
+            <?php endif; ?>
+
+            <?php if (isAuthenticated() && getCurrentUserRole() === 'student'): ?>
+                <form method="post">
+                    <input type="hidden" name="action" value="submit_property_review">
+                    <div class="form-group">
+                        <label for="rating">Rating *</label>
+                        <select id="rating" name="rating" required>
+                            <option value="">Select rating</option>
+                            <option value="5">5 stars - Excellent</option>
+                            <option value="4">4 stars - Good</option>
+                            <option value="3">3 stars - Okay</option>
+                            <option value="2">2 stars - Poor</option>
+                            <option value="1">1 star - Bad</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="review-title">Title *</label>
+                        <input type="text" id="review-title" name="title" maxlength="255" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="review-comment">Review *</label>
+                        <textarea id="review-comment" name="comment" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-success">Submit Review</button>
+                </form>
+                <small style="display: block; margin-top: 0.75rem; color: #7f8c8d;">Only students with a completed booking for this property can submit a review.</small>
+            <?php elseif (!isAuthenticated()): ?>
+                <p><a href="<?php echo pageUrl('login.php'); ?>">Login as a student</a> to rate this property after completing a booking.</p>
+            <?php else: ?>
+                <p style="color: #7f8c8d;">Only students can rate properties.</p>
+            <?php endif; ?>
+        </div>
     </div>
 
     <div>
@@ -272,6 +437,33 @@ require_once '../templates/header.php';
         </div>
     </div>
 </div>
+
+<div class="image-lightbox" id="image-lightbox" onclick="closeImageLightbox()">
+    <button type="button" class="lightbox-close" onclick="closeImageLightbox()" aria-label="Close full image">&times;</button>
+    <img id="lightbox-image" src="" alt="Full property image" onclick="event.stopPropagation()">
+</div>
+
+<script>
+    function openImageLightbox(imageUrl) {
+        const lightbox = document.getElementById('image-lightbox');
+        const image = document.getElementById('lightbox-image');
+        image.src = imageUrl;
+        lightbox.classList.add('active');
+    }
+
+    function closeImageLightbox() {
+        const lightbox = document.getElementById('image-lightbox');
+        const image = document.getElementById('lightbox-image');
+        lightbox.classList.remove('active');
+        image.src = '';
+    }
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closeImageLightbox();
+        }
+    });
+</script>
 
 <?php if (!empty($reviews)): ?>
     <h2>Reviews</h2>

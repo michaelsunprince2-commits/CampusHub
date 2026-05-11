@@ -31,7 +31,7 @@ class Review
         $stmt->execute();
         $result = $stmt->get_result()->fetch_assoc();
 
-        if ($result['count'] === 0) {
+        if ((int)$result['count'] === 0) {
             return ['success' => false, 'message' => 'You must have completed a booking to review'];
         }
 
@@ -44,7 +44,7 @@ class Review
         $stmt->execute();
         $result = $stmt->get_result()->fetch_assoc();
 
-        if ($result['count'] > 0) {
+        if ((int)$result['count'] > 0) {
             return ['success' => false, 'message' => 'You have already reviewed this property'];
         }
 

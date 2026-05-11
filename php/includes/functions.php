@@ -8,15 +8,57 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+/**
+ * Hydrate PHP session from a mobile API token.
+ */
+function authenticateWithSessionToken($conn)
+{
+    if (!$conn || isset($_SESSION['user_id'], $_SESSION['user_token'])) {
+        return;
+    }
+
+    $token = $_SERVER['HTTP_X_SESSION_TOKEN'] ?? '';
+    $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+
+    if (!$token && preg_match('/Bearer\s+(\S+)/i', $authHeader, $matches)) {
+        $token = $matches[1];
+    }
+
+    if (!$token) {
+        return;
+    }
+
+    $stmt = $conn->prepare("
+        SELECT s.session_token, u.id, u.email, u.first_name, u.last_name, u.role
+        FROM sessions s
+        INNER JOIN users u ON u.id = s.user_id
+        WHERE s.session_token = ? AND s.expires_at > NOW()
+        LIMIT 1
+    ");
+    $stmt->bind_param("s", $token);
+    $stmt->execute();
+    $session = $stmt->get_result()->fetch_assoc();
+
+    if (!$session) {
+        return;
+    }
+
+    $_SESSION['user_id'] = $session['id'];
+    $_SESSION['user_email'] = $session['email'];
+    $_SESSION['user_name'] = trim($session['first_name'] . ' ' . $session['last_name']);
+    $_SESSION['user_role'] = $session['role'];
+    $_SESSION['user_token'] = $session['session_token'];
+}
 
 /**
  * Check if user is authenticated
  */
 function isAuthenticated()
 {
+    global $conn;
+    authenticateWithSessionToken($conn ?? null);
     return isset($_SESSION['user_id']) && isset($_SESSION['user_token']);
 }
-
 /**
  * Get current user ID
  */
@@ -31,6 +73,15 @@ function getCurrentUserId()
 function getCurrentUserRole()
 {
     return $_SESSION['user_role'] ?? null;
+}
+
+/**
+ * Control whether landlords can upload new property videos.
+ */
+function arePropertyVideoUploadsEnabled()
+{
+    $value = strtolower(trim((string)(getenv('VIDEO_UPLOADS_ENABLED') ?: 'true')));
+    return !in_array($value, ['0', 'false', 'off', 'no'], true);
 }
 
 /**

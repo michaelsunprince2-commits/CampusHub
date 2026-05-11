@@ -42,9 +42,11 @@ try {
 
             $propertyData = $property->getById((int)$_GET['id']);
             if ($propertyData) {
-                $propertyData['amenities'] = json_decode($propertyData['amenities'] ?? '[]', true);
-                $propertyData['rules'] = json_decode($propertyData['rules'] ?? '[]', true);
-                $propertyData['image_urls'] = json_decode($propertyData['image_urls'] ?? '[]', true);
+                foreach (['amenities', 'rules', 'image_urls'] as $jsonField) {
+                    if (!is_array($propertyData[$jsonField] ?? null)) {
+                        $propertyData[$jsonField] = json_decode($propertyData[$jsonField] ?? '[]', true) ?: [];
+                    }
+                }
                 jsonResponse(true, 'Property retrieved', $propertyData);
             } else {
                 jsonResponse(false, 'Property not found');

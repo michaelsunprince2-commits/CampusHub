@@ -316,6 +316,93 @@ require_once '../templates/header.php';
             font-size: 3rem;
             margin-bottom: 1rem;
         }
+
+        .campus-section {
+            margin: 4rem 0 3rem;
+            padding: 2.5rem 1.5rem;
+            background: #ffffff;
+            border: 1px solid #e5edf2;
+            border-radius: 8px;
+            box-shadow: 0 6px 18px rgba(44, 62, 80, 0.07);
+        }
+
+        .campus-header {
+            max-width: 760px;
+            margin-bottom: 1.75rem;
+        }
+
+        .campus-header h2 {
+            margin-bottom: 0.5rem;
+            color: #2c3e50;
+        }
+
+        .campus-header p {
+            color: #657786;
+            font-size: 1.05rem;
+            margin-bottom: 0;
+        }
+
+        .campus-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+
+        .campus-card {
+            display: grid;
+            gap: 0.9rem;
+            padding: 1rem;
+            border: 1px solid #dfeaf0;
+            border-radius: 8px;
+            background: #fbfcfd;
+        }
+
+        .campus-card-header {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+        }
+
+        .campus-mark {
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            display: grid;
+            place-items: center;
+            background: #eef5f6;
+            color: #1f6f78;
+            font-weight: 800;
+            flex: 0 0 auto;
+        }
+
+        .campus-name {
+            color: #2c3e50;
+            font-weight: 800;
+        }
+
+        .campus-location {
+            color: #657786;
+            font-size: 0.9rem;
+            margin-top: 0.2rem;
+        }
+
+        .campus-list {
+            display: grid;
+            gap: 0.55rem;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .campus-list li {
+            padding: 0.55rem 0.7rem;
+            border-radius: 7px;
+            background: #ffffff;
+            color: #34495e;
+            border: 1px solid #edf2f5;
+            font-size: 0.95rem;
+            line-height: 1.35;
+        }
     </style>
 
     <h1>Welcome to CampusNest</h1>
@@ -332,6 +419,63 @@ require_once '../templates/header.php';
         <button type="submit" class="btn">Search</button>
     </form>
 </div>
+
+<section class="campus-section">
+    <div class="campus-header">
+        <h2>Find Housing Near Your Campus</h2>
+        <p>CampusNest helps students discover verified housing around key campus areas. These are areas we support, not official university partnerships.</p>
+    </div>
+    <div class="campus-grid">
+        <div class="campus-card">
+            <div class="campus-card-header">
+                <div class="campus-mark">NS</div>
+                <div>
+                    <div class="campus-name">Nasarawa & Lafia</div>
+                    <div class="campus-location">Keffi, Lafia, and nearby student areas</div>
+                </div>
+            </div>
+            <ul class="campus-list">
+                <li>Nasarawa State University, Keffi</li>
+                <li>Lincoln University Malaysia NSUK Campus</li>
+                <li>Federal University of Lafia</li>
+            </ul>
+        </div>
+        <div class="campus-card">
+            <div class="campus-card-header">
+                <div class="campus-mark">FCT</div>
+                <div>
+                    <div class="campus-name">Abuja / FCT Universities</div>
+                    <div class="campus-location">Government and private university areas</div>
+                </div>
+            </div>
+            <ul class="campus-list">
+                <li>University of Abuja</li>
+                <li>National Open University of Nigeria</li>
+                <li>Nile University of Nigeria</li>
+                <li>Baze University</li>
+                <li>Veritas University, Abuja</li>
+                <li>African University of Science and Technology</li>
+                <li>Philomath University, Kuje</li>
+            </ul>
+        </div>
+        <div class="campus-card">
+            <div class="campus-card-header">
+                <div class="campus-mark">BN</div>
+                <div>
+                    <div class="campus-name">Benue State Universities</div>
+                    <div class="campus-location">Makurdi, Otukpo, Mkar, and Ihugh areas</div>
+                </div>
+            </div>
+            <ul class="campus-list">
+                <li>Joseph Sarwuan Tarka University, Makurdi</li>
+                <li>Reverend Father Moses Orshio Adasu University, Makurdi</li>
+                <li>Federal University of Health Sciences, Otukpo</li>
+                <li>University of Mkar</li>
+                <li>Benue State University of Agriculture, Science and Technology, Ihugh</li>
+            </ul>
+        </div>
+    </div>
+</section>
 
 <h2>Why Choose CampusNest?</h2>
 <div class="features">

@@ -23,8 +23,8 @@ class Property
                 landlord_id, name, description, address, city, zipcode,
                 latitude, longitude, property_type, bedrooms, bathrooms,
                 square_feet, furnished, price_per_month, availability_date,
-                max_occupants, amenities, rules, image_urls
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                max_occupants, amenities, rules, image_urls, video_url
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
 
         $amenities = json_encode($data['amenities'] ?? []);
@@ -32,7 +32,7 @@ class Property
         $imageUrls = json_encode($data['image_urls'] ?? []);
 
         $stmt->bind_param(
-            "isssssddsidiidsisss",
+            "isssssddsidiidsissss",
             $landlordId,
             $data['name'],
             $data['description'],
@@ -51,7 +51,8 @@ class Property
             $data['max_occupants'],
             $amenities,
             $rules,
-            $imageUrls
+            $imageUrls,
+            $data['video_url']
         );
 
         if ($stmt->execute()) {
@@ -192,7 +193,7 @@ class Property
 
         // Build update query
         foreach ($data as $key => $value) {
-            if (in_array($key, ['name', 'description', 'address', 'city', 'zipcode', 'property_type', 'furnished'])) {
+            if (in_array($key, ['name', 'description', 'address', 'city', 'zipcode', 'property_type', 'availability_date', 'furnished', 'video_url'])) {
                 $updates[] = "$key = ?";
                 $params[] = $value;
                 $types .= 's';

@@ -27,6 +27,7 @@ if (!$propertyData || $propertyData['landlord_id'] != getCurrentUserId()) {
 
 $error = '';
 $success = '';
+$videoUploadsEnabled = arePropertyVideoUploadsEnabled();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = [
@@ -47,6 +48,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'max_occupants' => isset($_POST['max_occupants']) ? (int)$_POST['max_occupants'] : 1,
         'amenities' => array_map('sanitizeString', (array)($_POST['amenities'] ?? [])),
         'rules' => array_map('sanitizeString', (array)($_POST['rules'] ?? [])),
+        'image_urls' => $propertyData['image_urls'] ?? [],
+        'video_url' => isset($_POST['remove_video']) ? null : ($propertyData['video_url'] ?? null),
     ];
 
     // Validation
@@ -59,13 +62,115 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($data['price_per_month'] <= 0) {
         $error = 'Price must be greater than 0';
     } else {
-        $result = $propertyModel->update((int)$_GET['id'], getCurrentUserId(), $data);
+        if (!empty($_FILES['images']['name'][0])) {
+            $uploadedFiles = array_filter($_FILES['images']['name']);
 
-        if ($result['success']) {
-            $success = 'Property updated successfully!';
-            $propertyData = array_merge($propertyData, $data);
-        } else {
-            $error = $result['message'];
+            if (count($uploadedFiles) > 5) {
+                $error = 'You can upload up to 5 images only';
+            } else {
+                $uploadDir = __DIR__ . '/../uploads/properties/';
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0755, true);
+                }
+
+                $allowedExts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+                $allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                $maxFileSize = 5 * 1024 * 1024;
+                $newImageUrls = [];
+
+                foreach ($_FILES['images']['name'] as $key => $imageName) {
+                    if (empty($imageName) || $_FILES['images']['error'][$key] === UPLOAD_ERR_NO_FILE) {
+                        continue;
+                    }
+
+                    if ($_FILES['images']['error'][$key] !== UPLOAD_ERR_OK) {
+                        $error = 'One of the images could not be uploaded. Please try again.';
+                        break;
+                    }
+
+                    if ($_FILES['images']['size'][$key] > $maxFileSize) {
+                        $error = 'Each image must be 5MB or smaller';
+                        break;
+                    }
+
+                    $tmpPath = $_FILES['images']['tmp_name'][$key];
+                    $mimeType = mime_content_type($tmpPath);
+                    $fileExt = strtolower(pathinfo($imageName, PATHINFO_EXTENSION));
+
+                    if (!in_array($fileExt, $allowedExts, true) || !in_array($mimeType, $allowedMimeTypes, true)) {
+                        $error = 'Images must be JPG, PNG, GIF, or WebP files';
+                        break;
+                    }
+
+                    $newFileName = 'property_' . getCurrentUserId() . '_' . time() . '_' . uniqid() . '.' . $fileExt;
+                    $uploadPath = $uploadDir . $newFileName;
+
+                    if (!move_uploaded_file($tmpPath, $uploadPath)) {
+                        $error = 'Unable to save one of the uploaded images';
+                        break;
+                    }
+
+                    $newImageUrls[] = getBaseUrl() . '/php/uploads/properties/' . $newFileName;
+                }
+
+                if (!$error && !empty($newImageUrls)) {
+                    $data['image_urls'] = $newImageUrls;
+                }
+            }
+        }
+
+        if (!empty($_FILES['video']['name']) && $_FILES['video']['error'] !== UPLOAD_ERR_NO_FILE) {
+            if (!$videoUploadsEnabled) {
+                $error = 'Property video uploads are currently paused. Please save changes without replacing the video.';
+            } elseif ($_FILES['video']['error'] !== UPLOAD_ERR_OK) {
+                $error = 'The video could not be uploaded. Please try again.';
+            } else {
+                $uploadDir = __DIR__ . '/../uploads/properties/videos/';
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0755, true);
+                }
+
+                $allowedVideoExts = ['mp4', 'webm', 'mov'];
+                $allowedVideoMimeTypes = [
+                    'video/mp4',
+                    'video/webm',
+                    'video/quicktime',
+                    'video/x-m4v',
+                    'application/mp4',
+                    'application/octet-stream'
+                ];
+                $maxVideoSize = 40 * 1024 * 1024;
+                $videoName = $_FILES['video']['name'];
+                $videoTmpPath = $_FILES['video']['tmp_name'];
+                $videoMimeType = mime_content_type($videoTmpPath);
+                $videoExt = strtolower(pathinfo($videoName, PATHINFO_EXTENSION));
+
+                if ($_FILES['video']['size'] > $maxVideoSize) {
+                    $error = 'Property video must be 40MB or smaller';
+                } elseif (!in_array($videoExt, $allowedVideoExts, true) || !in_array($videoMimeType, $allowedVideoMimeTypes, true)) {
+                    $error = 'Property video must be an MP4, WebM, or MOV file';
+                } else {
+                    $newVideoName = 'property_video_' . getCurrentUserId() . '_' . time() . '_' . uniqid() . '.' . $videoExt;
+                    $videoUploadPath = $uploadDir . $newVideoName;
+
+                    if (!move_uploaded_file($videoTmpPath, $videoUploadPath)) {
+                        $error = 'Unable to save the uploaded video';
+                    } else {
+                        $data['video_url'] = getBaseUrl() . '/php/uploads/properties/videos/' . $newVideoName;
+                    }
+                }
+            }
+        }
+
+        if (!$error) {
+            $result = $propertyModel->update((int)$_GET['id'], getCurrentUserId(), $data);
+
+            if ($result['success']) {
+                $success = 'Property updated successfully!';
+                $propertyData = array_merge($propertyData, $data);
+            } else {
+                $error = $result['message'];
+            }
         }
     }
 }
@@ -170,6 +275,26 @@ require_once '../templates/header.php';
     .form-actions a {
         flex: 1;
     }
+
+    .current-images {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .current-image {
+        aspect-ratio: 4 / 3;
+        border-radius: 8px;
+        background: #ecf0f1;
+        overflow: hidden;
+    }
+
+    .current-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
 </style>
 
 <div class="property-form">
@@ -187,7 +312,7 @@ require_once '../templates/header.php';
         <div class="alert alert-success"><?php echo htmlspecialchars($success); ?></div>
     <?php endif; ?>
 
-    <form method="post">
+    <form method="post" enctype="multipart/form-data">
         <!-- Basic Information -->
         <div class="form-section">
             <h3>Basic Information</h3>
@@ -305,6 +430,52 @@ require_once '../templates/header.php';
             </div>
         </div>
 
+        <!-- Images -->
+        <div class="form-section">
+            <h3>Property Images</h3>
+            <?php
+            $currentImages = $propertyData['image_urls'] ?? [];
+            if (!empty($currentImages) && is_array($currentImages)):
+            ?>
+                <div class="current-images">
+                    <?php foreach (array_slice($currentImages, 0, 5) as $image): ?>
+                        <div class="current-image">
+                            <img src="<?php echo htmlspecialchars($image); ?>" alt="Current property image">
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+            <div class="form-group">
+                <label for="images">Replace Property Images</label>
+                <input type="file" id="images" name="images[]" multiple accept="image/*" onchange="updateImageCount(this)">
+                <small>Optional. Select up to 5 new JPG, PNG, GIF, or WebP images. Selecting images will replace the current set.</small>
+                <small id="image-count" style="color: #7f8c8d; margin-top: 0.5rem; display: block;"></small>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3>Property Video</h3>
+            <div class="form-group">
+                <?php if (!empty($propertyData['video_url'])): ?>
+                    <video controls style="width: 100%; max-height: 320px; margin-bottom: 1rem; border-radius: 8px; background: #000;">
+                        <source src="<?php echo htmlspecialchars($propertyData['video_url']); ?>">
+                        Your browser does not support the video tag.
+                    </video>
+                    <div class="checkbox-item" style="margin-bottom: 1rem;">
+                        <input type="checkbox" id="remove_video" name="remove_video" value="1">
+                        <label for="remove_video" style="margin: 0; font-weight: 400;">Remove current video</label>
+                    </div>
+                <?php endif; ?>
+                <?php if ($videoUploadsEnabled): ?>
+                    <label for="video"><?php echo empty($propertyData['video_url']) ? 'Upload Interior Video' : 'Replace Interior Video'; ?></label>
+                    <input type="file" id="video" name="video" accept="video/mp4,video/webm,video/quicktime">
+                    <small>Optional. Upload one MP4, WebM, or MOV video up to 40MB.</small>
+                <?php else: ?>
+                    <div class="alert alert-info">Video uploads are currently paused. Existing videos can still be viewed, but landlords cannot upload or replace videos right now.</div>
+                <?php endif; ?>
+            </div>
+        </div>
+
         <!-- Form Actions -->
         <div class="form-actions">
             <button type="submit" class="btn btn-success">Save Changes</button>
@@ -312,5 +483,13 @@ require_once '../templates/header.php';
         </div>
     </form>
 </div>
+
+<script>
+    function updateImageCount(input) {
+        const count = input.files.length;
+        const imageCountEl = document.getElementById('image-count');
+        imageCountEl.textContent = count > 0 ? count + ' image(s) selected' : '';
+    }
+</script>
 
 <?php require_once '../templates/footer.php'; ?>

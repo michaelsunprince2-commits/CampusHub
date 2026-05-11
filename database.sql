@@ -75,6 +75,7 @@ CREATE TABLE properties (
   amenities JSON,
   rules JSON,
   image_urls JSON,
+  video_url VARCHAR(255),
   verification_status ENUM('pending', 'verified', 'rejected') DEFAULT 'pending',
   verified_by INT NULL,
   rating DECIMAL(3, 2) DEFAULT 0,

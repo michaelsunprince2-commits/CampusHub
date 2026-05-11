@@ -69,13 +69,19 @@ try {
                 $_SESSION['user_role'] = $result['user']['role'];
                 $_SESSION['user_token'] = $sessionToken;
 
-                jsonResponse(true, $result['message'], $result['user']);
+                jsonResponse(true, $result['message'], array_merge($result['user'], ['session_token' => $sessionToken]));
             } else {
                 jsonResponse(false, $result['message']);
             }
             break;
 
         case 'logout':
+            authenticateWithSessionToken($conn);
+            if (!empty($_SESSION['user_token'])) {
+                $stmt = $conn->prepare("DELETE FROM sessions WHERE session_token = ?");
+                $stmt->bind_param("s", $_SESSION['user_token']);
+                $stmt->execute();
+            }
             session_destroy();
             jsonResponse(true, 'Logout successful');
             break;

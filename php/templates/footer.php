@@ -44,7 +44,8 @@
                         <p>Need help with a listing, booking, verification, or account issue?</p>
                         <ul>
                             <li><a href="mailto:support@campusnest.local">support@campusnest.local</a></li>
-                            <li><a href="<?php echo pageUrl('messages.php'); ?>">Message Center</a></li>
+                            <li><a href="<?php echo pageUrl('terms.php'); ?>">Terms of Service</a></li>
+                            <li><a href="<?php echo pageUrl('security-policy.php'); ?>">Security Policy</a></li>
                             <li>Campus housing support for students and landlords</li>
                         </ul>
                     </div>

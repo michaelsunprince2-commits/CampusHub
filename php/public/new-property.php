@@ -14,6 +14,7 @@ require_once '../models/Property.php';
 
 $error = '';
 $success = '';
+$videoUploadsEnabled = arePropertyVideoUploadsEnabled();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = [
@@ -34,7 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'max_occupants' => isset($_POST['max_occupants']) ? (int)$_POST['max_occupants'] : 1,
         'amenities' => array_map('sanitizeString', (array)($_POST['amenities'] ?? [])),
         'rules' => array_map('sanitizeString', (array)($_POST['rules'] ?? [])),
-        'image_urls' => []
+        'image_urls' => [],
+        'video_url' => null
     ];
 
     // Validation
@@ -98,6 +100,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     $data['image_urls'][] = getBaseUrl() . '/php/uploads/properties/' . $newFileName;
+                }
+            }
+        }
+
+        if (!$error) {
+            // Handle optional property video upload
+            if (!empty($_FILES['video']['name']) && $_FILES['video']['error'] !== UPLOAD_ERR_NO_FILE) {
+                if (!$videoUploadsEnabled) {
+                    $error = 'Property video uploads are currently paused. Please create the property without a video.';
+                } elseif ($_FILES['video']['error'] !== UPLOAD_ERR_OK) {
+                    $error = 'The video could not be uploaded. Please try again.';
+                } else {
+                    $uploadDir = __DIR__ . '/../uploads/properties/videos/';
+                    if (!is_dir($uploadDir)) {
+                        mkdir($uploadDir, 0755, true);
+                    }
+
+                    $allowedVideoExts = ['mp4', 'webm', 'mov'];
+                    $allowedVideoMimeTypes = [
+                        'video/mp4',
+                        'video/webm',
+                        'video/quicktime',
+                        'video/x-m4v',
+                        'application/mp4',
+                        'application/octet-stream'
+                    ];
+                    $maxVideoSize = 40 * 1024 * 1024;
+                    $videoName = $_FILES['video']['name'];
+                    $videoTmpPath = $_FILES['video']['tmp_name'];
+                    $videoMimeType = mime_content_type($videoTmpPath);
+                    $videoExt = strtolower(pathinfo($videoName, PATHINFO_EXTENSION));
+
+                    if ($_FILES['video']['size'] > $maxVideoSize) {
+                        $error = 'Property video must be 40MB or smaller';
+                    } elseif (!in_array($videoExt, $allowedVideoExts, true) || !in_array($videoMimeType, $allowedVideoMimeTypes, true)) {
+                        $error = 'Property video must be an MP4, WebM, or MOV file';
+                    } else {
+                        $newVideoName = 'property_video_' . getCurrentUserId() . '_' . time() . '_' . uniqid() . '.' . $videoExt;
+                        $videoUploadPath = $uploadDir . $newVideoName;
+
+                        if (!move_uploaded_file($videoTmpPath, $videoUploadPath)) {
+                            $error = 'Unable to save the uploaded video';
+                        } else {
+                            $data['video_url'] = getBaseUrl() . '/php/uploads/properties/videos/' . $newVideoName;
+                        }
+                    }
                 }
             }
         }
@@ -424,6 +472,23 @@ require_once '../templates/header.php';
                 <small id="file-count" style="color: #7f8c8d; margin-top: 0.5rem; display: block;"></small>
             </div>
         </div>
+
+        <?php if ($videoUploadsEnabled): ?>
+            <!-- Video -->
+            <div class="form-section">
+                <h3>Property Video</h3>
+                <div class="form-group">
+                    <label for="video">Upload Interior Video</label>
+                    <input type="file" id="video" name="video" accept="video/mp4,video/webm,video/quicktime">
+                    <small>Optional. Upload one MP4, WebM, or MOV video up to 40MB so students can see the apartment interior.</small>
+                </div>
+            </div>
+        <?php else: ?>
+            <div class="form-section">
+                <h3>Property Video</h3>
+                <div class="alert alert-info">Video uploads are currently paused. You can still create this property with images.</div>
+            </div>
+        <?php endif; ?>
 
         <!-- Form Actions -->
         <div class="form-actions">

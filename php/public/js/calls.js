@@ -176,6 +176,10 @@
             throw new Error('Audio and video calls require a modern browser on localhost or HTTPS.');
         }
 
+        if (!window.isSecureContext) {
+            throw new Error('Camera access requires HTTPS or localhost.');
+        }
+
         try {
             localStream = await navigator.mediaDevices.getUserMedia({
                 audio: true,
@@ -190,12 +194,21 @@
                 throw error;
             }
 
-            setStatus('Camera is unavailable. Continuing with audio.');
-            setDebug(`Camera unavailable: ${error.message}`);
-            localStream = await navigator.mediaDevices.getUserMedia({
-                audio: true,
-                video: false
-            });
+            setDebug(`Camera unavailable with preferred settings: ${error.message}`);
+
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: true
+                });
+            } catch (fallbackError) {
+                setStatus('Camera is unavailable. Continuing with audio.');
+                setDebug(`Camera unavailable: ${fallbackError.message}`);
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: false
+                });
+            }
         }
 
         const videoTracks = localStream.getVideoTracks();
@@ -511,6 +524,7 @@
             );
             setControls('active');
             setButtonsDisabled(true);
+            await getMedia(callType);
 
             const start = await callApi('start', { recipient_id: selectedUserId, call_type: callType });
 
@@ -540,7 +554,9 @@
         try {
             localOfferSent = true;
             setStatus('Call accepted. Connecting...');
-            await getMedia(currentCall.call_type);
+            if (!localStream) {
+                await getMedia(currentCall.call_type);
+            }
             createPeer();
             const offer = await peer.createOffer();
             await peer.setLocalDescription(offer);
