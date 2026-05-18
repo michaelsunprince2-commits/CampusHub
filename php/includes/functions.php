@@ -318,3 +318,81 @@ function pageUrl($page)
     $baseUrl = getBaseUrl();
     return $baseUrl . '/php/public/' . $page;
 }
+
+/**
+ * Send an Expo push notification to all devices registered for a user.
+ */
+function sendPushNotificationToUser($conn, $userId, $title, $body, $data = [])
+{
+    if (!$conn || !$userId) {
+        return false;
+    }
+
+    $conn->query("
+        CREATE TABLE IF NOT EXISTS user_push_tokens (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            push_token VARCHAR(255) NOT NULL UNIQUE,
+            platform VARCHAR(32) NOT NULL DEFAULT 'unknown',
+            last_used_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_user_id (user_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
+    $stmt = $conn->prepare("SELECT push_token FROM user_push_tokens WHERE user_id = ?");
+    if (!$stmt) {
+        return false;
+    }
+
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $tokens = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+    if (!$tokens) {
+        return false;
+    }
+
+    $messages = array_map(function ($row) use ($title, $body, $data) {
+        return [
+            'to' => $row['push_token'],
+            'sound' => 'default',
+            'title' => $title,
+            'body' => $body,
+            'data' => $data,
+        ];
+    }, $tokens);
+
+    $payload = json_encode($messages);
+
+    if (function_exists('curl_init')) {
+        $ch = curl_init('https://exp.host/--/api/v2/push/send');
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => [
+                'Accept: application/json',
+                'Content-Type: application/json',
+            ],
+            CURLOPT_POSTFIELDS => $payload,
+            CURLOPT_TIMEOUT => 5,
+        ]);
+        curl_exec($ch);
+        curl_close($ch);
+        return true;
+    }
+
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'POST',
+            'header' => "Accept: application/json\r\nContent-Type: application/json\r\n",
+            'content' => $payload,
+            'timeout' => 5,
+        ],
+    ]);
+
+    @file_get_contents('https://exp.host/--/api/v2/push/send', false, $context);
+    return true;
+}

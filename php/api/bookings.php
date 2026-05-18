@@ -38,6 +38,24 @@ try {
                 (int)$data['number_of_occupants']
             );
 
+            if ($result['success']) {
+                $stmt = $conn->prepare("SELECT landlord_id, name FROM properties WHERE id = ? LIMIT 1");
+                $propertyId = (int)$data['property_id'];
+                $stmt->bind_param("i", $propertyId);
+                $stmt->execute();
+                $propertyData = $stmt->get_result()->fetch_assoc();
+
+                if ($propertyData) {
+                    sendPushNotificationToUser(
+                        $conn,
+                        (int)$propertyData['landlord_id'],
+                        'New booking request',
+                        'A student requested ' . $propertyData['name'],
+                        ['type' => 'booking', 'bookingId' => $result['booking_id'] ?? null]
+                    );
+                }
+            }
+
             jsonResponse(
                 $result['success'],
                 $result['message'],
@@ -107,6 +125,18 @@ try {
             }
 
             $result = $booking->confirm((int)$_GET['id'], getCurrentUserId());
+            if ($result['success']) {
+                $bookingData = $booking->getById((int)$_GET['id']);
+                if ($bookingData) {
+                    sendPushNotificationToUser(
+                        $conn,
+                        (int)$bookingData['student_id'],
+                        'Booking confirmed',
+                        'Your booking for ' . ($bookingData['property_name'] ?? 'a property') . ' was confirmed',
+                        ['type' => 'booking', 'bookingId' => (int)$_GET['id']]
+                    );
+                }
+            }
             jsonResponse($result['success'], $result['message']);
             break;
 
@@ -126,6 +156,26 @@ try {
             $reason = $data['reason'] ?? '';
 
             $result = $booking->cancel((int)$_GET['id'], getCurrentUserId(), $reason);
+            if ($result['success']) {
+                $bookingData = $booking->getById((int)$_GET['id']);
+                if ($bookingData) {
+                    $stmt = $conn->prepare("SELECT landlord_id FROM properties WHERE id = ? LIMIT 1");
+                    $propertyId = (int)$bookingData['property_id'];
+                    $stmt->bind_param("i", $propertyId);
+                    $stmt->execute();
+                    $propertyData = $stmt->get_result()->fetch_assoc();
+
+                    if ($propertyData) {
+                        sendPushNotificationToUser(
+                            $conn,
+                            (int)$propertyData['landlord_id'],
+                            'Booking cancelled',
+                            'A booking for ' . ($bookingData['property_name'] ?? 'a property') . ' was cancelled',
+                            ['type' => 'booking', 'bookingId' => (int)$_GET['id']]
+                        );
+                    }
+                }
+            }
             jsonResponse($result['success'], $result['message']);
             break;
 

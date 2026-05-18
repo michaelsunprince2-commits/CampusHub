@@ -150,6 +150,13 @@ class Property
             $types .= 'i';
         }
 
+        if (!empty($filters['search'])) {
+            $query .= " AND (p.name LIKE ? OR p.city LIKE ? OR p.address LIKE ? OR p.property_type LIKE ? OR p.description LIKE ?)";
+            $searchTerm = '%' . $filters['search'] . '%';
+            array_push($params, $searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm);
+            $types .= 'sssss';
+        }
+
         $query .= " GROUP BY p.id ORDER BY p.created_at DESC LIMIT ? OFFSET ?";
         $params[] = $limit;
         $params[] = $offset;

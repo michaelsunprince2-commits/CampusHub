@@ -23,6 +23,10 @@ function paystackRequest($endpoint, $method = 'GET', $payload = null)
         jsonResponse(false, 'Paystack test secret key is not configured.');
     }
 
+    if (!function_exists('curl_init')) {
+        jsonResponse(false, 'PHP cURL is not enabled on this server. Enable cURL to use Paystack.');
+    }
+
     $ch = curl_init('https://api.paystack.co' . $endpoint);
     $headers = [
         'Authorization: Bearer ' . PAYSTACK_SECRET_KEY,
@@ -41,16 +45,21 @@ function paystackRequest($endpoint, $method = 'GET', $payload = null)
 
     $response = curl_exec($ch);
     $error = curl_error($ch);
+    $errorNumber = curl_errno($ch);
     $statusCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
     if ($response === false) {
-        jsonResponse(false, 'Paystack request failed: ' . $error);
+        jsonResponse(false, 'Paystack request failed: ' . ($error ?: 'cURL error ' . $errorNumber));
     }
 
     $decoded = json_decode($response, true);
-    if ($statusCode >= 400 || !$decoded) {
-        jsonResponse(false, 'Paystack returned an invalid response.');
+    if (!$decoded) {
+        jsonResponse(false, 'Paystack returned a non-JSON response. HTTP ' . $statusCode . ': ' . mb_substr(strip_tags($response), 0, 220));
+    }
+
+    if ($statusCode >= 400) {
+        jsonResponse(false, $decoded['message'] ?? ('Paystack request failed with HTTP ' . $statusCode));
     }
 
     return $decoded;

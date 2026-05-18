@@ -80,7 +80,7 @@ class User
             return ['success' => false, 'message' => 'Invalid email or password'];
         }
 
-        $stmt = $this->conn->prepare("SELECT id, password_hash, first_name, last_name, role FROM users WHERE email = ?");
+        $stmt = $this->conn->prepare("SELECT id, password_hash, first_name, last_name, role, phone, bio, profile_picture FROM users WHERE email = ?");
         $stmt->bind_param("s", $email);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -102,7 +102,12 @@ class User
                 'id' => $user['id'],
                 'email' => $email,
                 'name' => $user['first_name'] . ' ' . $user['last_name'],
-                'role' => $user['role']
+                'first_name' => $user['first_name'],
+                'last_name' => $user['last_name'],
+                'role' => $user['role'],
+                'phone' => $user['phone'],
+                'bio' => $user['bio'],
+                'profile_picture' => $user['profile_picture']
             ]
         ];
     }

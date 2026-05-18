@@ -19,7 +19,7 @@ class Booking
     public function create($propertyId, $studentId, $checkInDate, $checkOutDate, $numberOfOccupants)
     {
         // Check if property exists and is available
-        $stmt = $this->conn->prepare("SELECT price_per_month FROM properties WHERE id = ?");
+        $stmt = $this->conn->prepare("SELECT price_per_month, verification_status FROM properties WHERE id = ?");
         $stmt->bind_param("i", $propertyId);
         $stmt->execute();
         $propertyResult = $stmt->get_result()->fetch_assoc();
@@ -28,10 +28,27 @@ class Booking
             return ['success' => false, 'message' => 'Property not found'];
         }
 
+        if (($propertyResult['verification_status'] ?? '') !== 'verified') {
+            return ['success' => false, 'message' => 'Only verified properties can be booked'];
+        }
+
+        try {
+            $checkIn = new DateTime($checkInDate);
+            $checkOut = new DateTime($checkOutDate);
+        } catch (Exception $e) {
+            return ['success' => false, 'message' => 'Enter valid move-in and check-out dates'];
+        }
+
+        if ($checkOut <= $checkIn) {
+            return ['success' => false, 'message' => 'Check-out date must be after move-in date'];
+        }
+
+        if ($numberOfOccupants < 1) {
+            return ['success' => false, 'message' => 'Occupants must be at least 1'];
+        }
+
         // Calculate total rent from the monthly price. Exact yearly stays count as
         // 12 months, while partial extra months are rounded up.
-        $checkIn = new DateTime($checkInDate);
-        $checkOut = new DateTime($checkOutDate);
         $months = (($checkOut->format('Y') - $checkIn->format('Y')) * 12) + ($checkOut->format('n') - $checkIn->format('n'));
         if ((int)$checkOut->format('j') > (int)$checkIn->format('j')) {
             $months++;
@@ -68,7 +85,7 @@ class Booking
             return ['success' => true, 'message' => 'Booking created', 'booking_id' => $this->conn->insert_id, 'total_price' => $totalPrice];
         }
 
-        return ['success' => false, 'message' => 'Booking creation failed'];
+        return ['success' => false, 'message' => 'Booking creation failed: ' . $this->conn->error];
     }
 
     /**
@@ -179,6 +196,6 @@ class Booking
             return ['success' => true, 'message' => 'Booking cancelled'];
         }
 
-        return ['success' => false, 'message' => 'Cancellation failed'];
+        return ['success' => false, 'message' => 'Cancellation failed: ' . $this->conn->error];
     }
 }

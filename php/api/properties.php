@@ -24,6 +24,7 @@ try {
                 'min_price' => $_GET['min_price'] ?? null,
                 'max_price' => $_GET['max_price'] ?? null,
                 'bedrooms' => $_GET['bedrooms'] ?? null,
+                'search' => $_GET['search'] ?? null,
             ];
 
             $page = (int)($_GET['page'] ?? 1);

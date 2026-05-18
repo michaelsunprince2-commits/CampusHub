@@ -37,6 +37,18 @@ try {
                 $data['attachment_url'] ?? null
             );
 
+            if ($result['success']) {
+                $sender = getUserById($conn, getCurrentUserId());
+                $senderName = trim(($sender['first_name'] ?? '') . ' ' . ($sender['last_name'] ?? '')) ?: 'CampusNest';
+                sendPushNotificationToUser(
+                    $conn,
+                    (int)$data['recipient_id'],
+                    'New message',
+                    $senderName . ': ' . mb_substr(sanitizeInput($data['content']), 0, 80),
+                    ['type' => 'message', 'userId' => getCurrentUserId()]
+                );
+            }
+
             jsonResponse($result['success'], $result['message'], ['message_id' => $result['message_id'] ?? null]);
             break;
 
