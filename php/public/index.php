@@ -313,8 +313,14 @@ require_once '../templates/header.php';
         }
 
         .feature-icon {
-            font-size: 3rem;
             margin-bottom: 1rem;
+        }
+
+        .feature-icon svg {
+            width: 2.4rem;
+            height: 2.4rem;
+            color: #1f6f78;
+            stroke-width: 2;
         }
 
         .campus-section {
@@ -480,22 +486,44 @@ require_once '../templates/header.php';
 <h2>Why Choose CampusNest?</h2>
 <div class="features">
     <div class="feature">
-        <div class="feature-icon">🔍</div>
+        <div class="feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="7"></circle>
+                <path d="m16.5 16.5 4 4"></path>
+            </svg>
+        </div>
         <h3>Easy Search</h3>
         <p>Browse thousands of student properties with detailed information and photos</p>
     </div>
     <div class="feature">
-        <div class="feature-icon">✅</div>
+        <div class="feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6 9 17l-5-5"></path>
+                <path d="M21 12a9 9 0 1 1-5.3-8.2"></path>
+            </svg>
+        </div>
         <h3>Verified Listings</h3>
         <p>All properties are verified by our team to ensure quality and safety</p>
     </div>
     <div class="feature">
-        <div class="feature-icon">💬</div>
+        <div class="feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path>
+                <path d="M8 9h8"></path>
+                <path d="M8 13h5"></path>
+            </svg>
+        </div>
         <h3>Direct Messaging</h3>
         <p>Communicate directly with landlords and other students</p>
     </div>
     <div class="feature">
-        <div class="feature-icon">💳</div>
+        <div class="feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                <path d="M3 10h18"></path>
+                <path d="M7 15h3"></path>
+            </svg>
+        </div>
         <h3>Secure Payment</h3>
         <p>Safe and secure payment processing for bookings</p>
     </div>
@@ -551,7 +579,7 @@ require_once '../templates/header.php';
     <h2 class="testimonials-title">Student Ambassadors Share Their Experience</h2>
     <div class="testimonials-grid">
         <div class="testimonial-card">
-            <div class="ambassador-avatar male"><img src="../uploads/profiles/segun.png" alt="Marcus Johnson"></div>
+            <div class="ambassador-avatar male"><img src="<?php echo getBaseUrl(); ?>/php/uploads/profiles/segun.png" alt="Marcus Johnson"></div>
             <div class="ambassador-name">Marcus Johnson</div>
             <div class="ambassador-title">Senior @ State University</div>
             <div class="testimonial-stars">⭐⭐⭐⭐⭐</div>
@@ -562,7 +590,7 @@ require_once '../templates/header.php';
         </div>
 
         <div class="testimonial-card">
-            <div class="ambassador-avatar female"><img src="../public/assets/female2.jpg" alt="Sophia Williams"></div>
+            <div class="ambassador-avatar female"><img src="<?php echo getBaseUrl(); ?>/php/public/assets/female2.jpg" alt="Sophia Williams"></div>
             <div class="ambassador-name">Sophia Williams</div>
             <div class="ambassador-title">Junior @ Tech Institute</div>
             <div class="testimonial-stars">⭐⭐⭐⭐⭐</div>
@@ -573,7 +601,7 @@ require_once '../templates/header.php';
         </div>
 
         <div class="testimonial-card">
-            <div class="ambassador-avatar female"><img src="../public/assets/female3.jpg" alt="Emma Rodriguez"></div>
+            <div class="ambassador-avatar female"><img src="<?php echo getBaseUrl(); ?>/php/public/assets/female3.jpg" alt="Emma Rodriguez"></div>
             <div class="ambassador-name">Emma Rodriguez</div>
             <div class="ambassador-title">Sophomore @ Arts University</div>
             <div class="testimonial-stars">⭐⭐⭐⭐⭐</div>
