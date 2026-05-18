@@ -47,6 +47,8 @@ require_once '../includes/functions.php';
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
         }
 
         .logo {
@@ -72,6 +74,8 @@ require_once '../includes/functions.php';
             display: flex;
             gap: 2rem;
             align-items: center;
+            flex-wrap: wrap;
+            justify-content: flex-end;
         }
 
         nav a {
@@ -182,12 +186,60 @@ require_once '../includes/functions.php';
         }
 
         @media (max-width: 860px) {
+            .header-content {
+                justify-content: center;
+                text-align: center;
+            }
+
+            nav {
+                width: 100%;
+            }
+
+            nav ul {
+                justify-content: center;
+                gap: 0.65rem;
+            }
+
+            nav a {
+                display: inline-flex;
+                align-items: center;
+                min-height: 40px;
+                padding: 0.35rem 0.55rem;
+            }
+
             .footer-content {
                 grid-template-columns: 1fr 1fr;
             }
         }
 
         @media (max-width: 560px) {
+            header {
+                padding: 0.75rem 0;
+            }
+
+            .container {
+                padding: 0 14px;
+            }
+
+            .logo img {
+                height: 44px;
+                max-width: 170px;
+            }
+
+            nav ul {
+                gap: 0.45rem;
+            }
+
+            nav a {
+                font-size: 0.92rem;
+                padding: 0.3rem 0.45rem;
+            }
+
+            nav a.btn {
+                padding: 0.45rem 0.75rem;
+                width: auto;
+            }
+
             .footer-content {
                 grid-template-columns: 1fr;
                 gap: 1.5rem;
@@ -246,7 +298,7 @@ require_once '../includes/functions.php';
                                 <li><a href="<?php echo pageUrl('bookings.php'); ?>">My Bookings</a></li>
                             <?php endif; ?>
                             <?php if (in_array(getCurrentUserRole(), ['admin', 'committee'])): ?>
-                                <li><a href="<?php echo pageUrl('admin-dashboard.php'); ?>">Admin</a></li>
+                                <li><a href="<?php echo pageUrl('admin-dashboard.php'); ?>"><?php echo getCurrentUserRole() === 'admin' ? 'Admin' : 'Committee'; ?></a></li>
                             <?php endif; ?>
                             <li><a href="<?php echo pageUrl('logout.php'); ?>" class="btn btn-danger">Logout</a></li>
                         <?php else: ?>

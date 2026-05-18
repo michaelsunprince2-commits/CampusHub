@@ -62,7 +62,7 @@ try {
             // Verify user is student or landlord of the property
             if (
                 $bookingData['student_id'] != getCurrentUserId() &&
-                !in_array(getCurrentUserRole(), ['admin', 'committee'])
+                getCurrentUserRole() !== 'admin'
             ) {
                 jsonResponse(false, 'Access denied');
             }

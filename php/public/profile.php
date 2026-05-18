@@ -26,9 +26,11 @@ $verificationNotes = '';
 $userRole = $userProfile['role'] ?? getCurrentUserRole() ?? 'student';
 
 $stmt = $conn->prepare("SELECT * FROM verification_requests WHERE user_id = ? AND request_type = 'user' ORDER BY created_at DESC LIMIT 1");
-$stmt->bind_param("i", $currentUserId);
-$stmt->execute();
-$verificationRequest = $stmt->get_result()->fetch_assoc();
+if ($stmt) {
+    $stmt->bind_param("i", $currentUserId);
+    $stmt->execute();
+    $verificationRequest = $stmt->get_result()->fetch_assoc();
+}
 if ($verificationRequest) {
     $verificationDocuments = json_decode($verificationRequest['document_urls'] ?? '{}', true);
     $verificationStatus = $verificationRequest['status'];
@@ -90,6 +92,21 @@ function saveVerificationFiles($uploadField, $uploadDir, $filePrefix, &$error)
     }
 
     return $urls;
+}
+
+function safeProfileCount($conn, $query)
+{
+    $stmt = $conn->prepare($query);
+    if (!$stmt) {
+        return 0;
+    }
+
+    if (!$stmt->execute()) {
+        return 0;
+    }
+
+    $row = $stmt->get_result()->fetch_assoc();
+    return (int)($row['count'] ?? 0);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -252,27 +269,36 @@ if ($userRole === 'landlord') {
         'users' => "SELECT COUNT(*) AS count FROM users",
         'properties' => "SELECT COUNT(*) AS count FROM properties",
         'pending_properties' => "SELECT COUNT(*) AS count FROM properties WHERE verification_status = 'pending'",
-        'bookings' => "SELECT COUNT(*) AS count FROM bookings",
     ];
 
+    if ($userRole === 'admin') {
+        $countQueries['bookings'] = "SELECT COUNT(*) AS count FROM bookings";
+    }
+
     foreach ($countQueries as $key => $query) {
-        $stmt = $conn->prepare($query);
-        $stmt->execute();
-        $platformCounts[$key] = (int)$stmt->get_result()->fetch_assoc()['count'];
+        $platformCounts[$key] = safeProfileCount($conn, $query);
     }
 
     $profileStats = [
         ['label' => 'Users', 'value' => $platformCounts['users']],
         ['label' => 'Properties', 'value' => $platformCounts['properties']],
         ['label' => 'Pending Reviews', 'value' => $platformCounts['pending_properties']],
-        ['label' => 'Bookings', 'value' => $platformCounts['bookings']],
     ];
 
-    $adminPermissions = [
-        ['title' => 'Property Verification', 'description' => 'Review, approve, or reject landlord listings.'],
-        ['title' => 'User Oversight', 'description' => 'Verify users and manage account roles.'],
-        ['title' => 'Booking Operations', 'description' => 'Monitor and update booking statuses.'],
-    ];
+    if ($userRole === 'admin') {
+        $profileStats[] = ['label' => 'Bookings', 'value' => $platformCounts['bookings']];
+        $adminPermissions = [
+            ['title' => 'Property Verification', 'description' => 'Review, approve, or reject landlord listings.'],
+            ['title' => 'User Oversight', 'description' => 'Verify users and manage account roles.'],
+            ['title' => 'Booking Operations', 'description' => 'Monitor and update booking statuses.'],
+        ];
+    } else {
+        $adminPermissions = [
+            ['title' => 'Property Verification', 'description' => 'Review, approve, or reject landlord listings.'],
+            ['title' => 'Landlord Verification', 'description' => 'Review submitted documents for landlord approval.'],
+            ['title' => 'Review Moderation', 'description' => 'Approve or reject property and platform reviews.'],
+        ];
+    }
 
     $primaryAction = ['label' => 'Dashboard', 'url' => pageUrl('admin-dashboard.php')];
 }
@@ -971,8 +997,8 @@ require_once '../templates/header.php';
     <div class="profile-grid">
         <section class="profile-panel profile-edit-panel">
             <div class="profile-edit-header">
-                <h2><?php echo $isAdminProfile ? 'Administrator Profile' : 'Edit Profile'; ?></h2>
-                <p><?php echo $isAdminProfile ? 'Keep your administrator account details accurate for platform oversight.' : 'Keep your contact details, bio, and verification documents up to date.'; ?></p>
+                <h2><?php echo $isAdminProfile ? ($userRole === 'admin' ? 'Administrator Profile' : 'Committee Profile') : 'Edit Profile'; ?></h2>
+                <p><?php echo $isAdminProfile ? ($userRole === 'admin' ? 'Keep your administrator account details accurate for platform oversight.' : 'Keep your committee account details accurate for moderation work.') : 'Keep your contact details, bio, and verification documents up to date.'; ?></p>
             </div>
 
             <form class="profile-edit-form" method="post" enctype="multipart/form-data">
@@ -1134,10 +1160,10 @@ require_once '../templates/header.php';
                         </div>
                         <div class="admin-security-item">
                             <strong>User Management</strong>
-                            <span>Enabled</span>
+                            <span><?php echo $userRole === 'admin' ? 'Enabled' : 'Restricted'; ?></span>
                         </div>
                     </div>
-                    <a href="<?php echo pageUrl('admin-dashboard.php'); ?>" class="btn profile-logout">Open Admin Dashboard</a>
+                    <a href="<?php echo pageUrl('admin-dashboard.php'); ?>" class="btn profile-logout"><?php echo $userRole === 'admin' ? 'Open Admin Dashboard' : 'Open Review Dashboard'; ?></a>
                 </section>
             <?php endif; ?>
         </aside>

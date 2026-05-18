@@ -20,14 +20,14 @@ class PlatformReview
     public function create($userId, $role, $rating, $title, $comment)
     {
         $stmt = $this->conn->prepare("
-            INSERT INTO platform_reviews (user_id, user_role, rating, title, comment)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO platform_reviews (user_id, user_role, rating, title, comment, status)
+            VALUES (?, ?, ?, ?, ?, 'pending')
         ");
 
         $stmt->bind_param("isiss", $userId, $role, $rating, $title, $comment);
 
         if ($stmt->execute()) {
-            return ['success' => true, 'message' => 'Review submitted successfully', 'review_id' => $this->conn->insert_id];
+            return ['success' => true, 'message' => 'Review submitted successfully and is awaiting admin approval', 'review_id' => $this->conn->insert_id];
         }
 
         return ['success' => false, 'message' => 'Failed to submit review'];
@@ -128,7 +128,7 @@ class PlatformReview
 
         $stmt = $this->conn->prepare("
             UPDATE platform_reviews
-            SET rating = ?, title = ?, comment = ?
+            SET rating = ?, title = ?, comment = ?, status = 'pending'
             WHERE id = ?
         ");
         $stmt->bind_param("issi", $rating, $title, $comment, $reviewId);

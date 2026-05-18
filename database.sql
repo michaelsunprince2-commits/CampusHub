@@ -155,12 +155,14 @@ CREATE TABLE reviews (
   title VARCHAR(255),
   comment TEXT,
   helpful_count INT DEFAULT 0,
+  status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
   FOREIGN KEY (reviewer_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_property (property_id),
-  INDEX idx_rating (rating)
+  INDEX idx_rating (rating),
+  INDEX idx_status (status)
 );
 
 -- Property Verification Requests
@@ -288,7 +290,7 @@ CREATE TABLE platform_reviews (
   title VARCHAR(255) NOT NULL,
   comment TEXT NOT NULL,
   helpful_count INT DEFAULT 0,
-  status ENUM('pending', 'approved', 'rejected') DEFAULT 'approved',
+  status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,

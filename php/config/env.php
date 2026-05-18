@@ -8,7 +8,22 @@ function loadEnv($path = null)
     $path = $path ?: dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . '.env';
 
     if (!is_readable($path)) {
-        return;
+        $root = dirname(__DIR__, 2);
+        $fallbacks = [
+            $root . DIRECTORY_SEPARATOR . '.env.txt',
+            $root . DIRECTORY_SEPARATOR . '.env.txt.txt',
+        ];
+
+        foreach ($fallbacks as $fallbackPath) {
+            if (is_readable($fallbackPath)) {
+                $path = $fallbackPath;
+                break;
+            }
+        }
+
+        if (!is_readable($path)) {
+            return;
+        }
     }
 
     $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);

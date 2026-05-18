@@ -241,7 +241,7 @@ try {
 
         case 'refund':
             // Refund payment
-            requireAuth(['admin', 'committee']);
+            requireAuth(['admin']);
 
             if ($method !== 'PUT') {
                 jsonResponse(false, 'Method not allowed');

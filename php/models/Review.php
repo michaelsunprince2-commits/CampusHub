@@ -7,10 +7,37 @@
 class Review
 {
     private $conn;
+    private $hasStatusColumn = null;
 
     public function __construct($conn)
     {
         $this->conn = $conn;
+    }
+
+    private function hasStatusColumn()
+    {
+        if ($this->hasStatusColumn !== null) {
+            return $this->hasStatusColumn;
+        }
+
+        $stmt = $this->conn->prepare("
+            SELECT COUNT(*) AS count
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'reviews'
+              AND COLUMN_NAME = 'status'
+        ");
+
+        if (!$stmt) {
+            $this->hasStatusColumn = false;
+            return $this->hasStatusColumn;
+        }
+
+        $stmt->execute();
+        $result = $stmt->get_result()->fetch_assoc();
+        $this->hasStatusColumn = (int)($result['count'] ?? 0) > 0;
+
+        return $this->hasStatusColumn;
     }
 
     /**
@@ -48,16 +75,27 @@ class Review
             return ['success' => false, 'message' => 'You have already reviewed this property'];
         }
 
-        $stmt = $this->conn->prepare("
-            INSERT INTO reviews (property_id, reviewer_id, rating, title, comment)
-            VALUES (?, ?, ?, ?, ?)
-        ");
+        $hasStatusColumn = $this->hasStatusColumn();
+        if ($hasStatusColumn) {
+            $stmt = $this->conn->prepare("
+                INSERT INTO reviews (property_id, reviewer_id, rating, title, comment, status)
+                VALUES (?, ?, ?, ?, ?, 'pending')
+            ");
+        } else {
+            $stmt = $this->conn->prepare("
+                INSERT INTO reviews (property_id, reviewer_id, rating, title, comment)
+                VALUES (?, ?, ?, ?, ?)
+            ");
+        }
         $stmt->bind_param("iisss", $propertyId, $reviewerId, $rating, $title, $comment);
 
         if ($stmt->execute()) {
-            // Update property rating
-            $this->updatePropertyRating($propertyId);
-            return ['success' => true, 'message' => 'Review created', 'review_id' => $this->conn->insert_id];
+            if (!$hasStatusColumn) {
+                $this->updatePropertyRating($propertyId);
+            }
+
+            $message = $hasStatusColumn ? 'Review submitted and is awaiting admin approval' : 'Review created';
+            return ['success' => true, 'message' => $message, 'review_id' => $this->conn->insert_id];
         }
 
         return ['success' => false, 'message' => 'Review creation failed'];
@@ -68,11 +106,12 @@ class Review
      */
     public function getPropertyReviews($propertyId, $limit = 10, $offset = 0)
     {
+        $statusFilter = $this->hasStatusColumn() ? "AND r.status = 'approved'" : "";
         $stmt = $this->conn->prepare("
             SELECT r.*, u.first_name, u.last_name, u.profile_picture
             FROM reviews r
             LEFT JOIN users u ON r.reviewer_id = u.id
-            WHERE r.property_id = ?
+            WHERE r.property_id = ? {$statusFilter}
             ORDER BY r.created_at DESC
             LIMIT ? OFFSET ?
         ");
@@ -86,14 +125,73 @@ class Review
      */
     public function updatePropertyRating($propertyId)
     {
+        $statusFilter = $this->hasStatusColumn() ? "AND status = 'approved'" : "";
         $stmt = $this->conn->prepare("
-            UPDATE properties 
-            SET rating = (SELECT AVG(rating) FROM reviews WHERE property_id = ?),
-                review_count = (SELECT COUNT(*) FROM reviews WHERE property_id = ?)
+            UPDATE properties
+            SET rating = COALESCE((SELECT AVG(rating) FROM reviews WHERE property_id = ? {$statusFilter}), 0),
+                review_count = (SELECT COUNT(*) FROM reviews WHERE property_id = ? {$statusFilter})
             WHERE id = ?
         ");
         $stmt->bind_param("iii", $propertyId, $propertyId, $propertyId);
         return $stmt->execute();
+    }
+
+    /**
+     * Approve review (admin only)
+     */
+    public function approveReview($reviewId)
+    {
+        if (!$this->hasStatusColumn()) {
+            return ['success' => false, 'message' => 'Review moderation database update is missing'];
+        }
+
+        $stmt = $this->conn->prepare("SELECT property_id FROM reviews WHERE id = ?");
+        $stmt->bind_param("i", $reviewId);
+        $stmt->execute();
+        $review = $stmt->get_result()->fetch_assoc();
+
+        if (!$review) {
+            return ['success' => false, 'message' => 'Review not found'];
+        }
+
+        $stmt = $this->conn->prepare("UPDATE reviews SET status = 'approved' WHERE id = ?");
+        $stmt->bind_param("i", $reviewId);
+
+        if ($stmt->execute()) {
+            $this->updatePropertyRating((int)$review['property_id']);
+            return ['success' => true, 'message' => 'Review approved'];
+        }
+
+        return ['success' => false, 'message' => 'Failed to approve review'];
+    }
+
+    /**
+     * Reject review (admin only)
+     */
+    public function rejectReview($reviewId)
+    {
+        if (!$this->hasStatusColumn()) {
+            return ['success' => false, 'message' => 'Review moderation database update is missing'];
+        }
+
+        $stmt = $this->conn->prepare("SELECT property_id FROM reviews WHERE id = ?");
+        $stmt->bind_param("i", $reviewId);
+        $stmt->execute();
+        $review = $stmt->get_result()->fetch_assoc();
+
+        if (!$review) {
+            return ['success' => false, 'message' => 'Review not found'];
+        }
+
+        $stmt = $this->conn->prepare("UPDATE reviews SET status = 'rejected' WHERE id = ?");
+        $stmt->bind_param("i", $reviewId);
+
+        if ($stmt->execute()) {
+            $this->updatePropertyRating((int)$review['property_id']);
+            return ['success' => true, 'message' => 'Review rejected'];
+        }
+
+        return ['success' => false, 'message' => 'Failed to reject review'];
     }
 
     /**

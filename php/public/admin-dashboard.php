@@ -4,7 +4,7 @@
  * Admin Dashboard
  */
 
-$pageTitle = 'Admin Dashboard';
+$pageTitle = 'Dashboard';
 require_once '../config/database.php';
 require_once '../includes/functions.php';
 
@@ -13,10 +13,17 @@ requireAuth(['admin', 'committee']);
 $error = '';
 $success = '';
 $currentAdminId = getCurrentUserId();
+$currentAdminRole = getCurrentUserRole();
+$isFullAdmin = $currentAdminRole === 'admin';
+$dashboardTitle = $isFullAdmin ? 'Admin Dashboard' : 'Committee Dashboard';
+$pageTitle = $dashboardTitle;
 
 function fetchOne($conn, $query, $types = '', ...$params)
 {
     $stmt = $conn->prepare($query);
+    if (!$stmt) {
+        throw new Exception('Database query failed: ' . $conn->error);
+    }
     if ($types) {
         $stmt->bind_param($types, ...$params);
     }
@@ -27,11 +34,39 @@ function fetchOne($conn, $query, $types = '', ...$params)
 function fetchAll($conn, $query, $types = '', ...$params)
 {
     $stmt = $conn->prepare($query);
+    if (!$stmt) {
+        throw new Exception('Database query failed: ' . $conn->error);
+    }
     if ($types) {
         $stmt->bind_param($types, ...$params);
     }
     $stmt->execute();
     return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+}
+
+function tableColumnExists($conn, $tableName, $columnName)
+{
+    $stmt = $conn->prepare("
+        SELECT COUNT(*) AS count
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = ?
+          AND COLUMN_NAME = ?
+    ");
+    if (!$stmt) {
+        return false;
+    }
+    $stmt->bind_param("ss", $tableName, $columnName);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_assoc();
+    return (int)($result['count'] ?? 0) > 0;
+}
+
+$hasPropertyReviewStatus = tableColumnExists($conn, 'reviews', 'status');
+$hasPlatformReviewStatus = tableColumnExists($conn, 'platform_reviews', 'status');
+
+if (!$hasPropertyReviewStatus || !$hasPlatformReviewStatus) {
+    $error = 'Review moderation database update is missing. Run migrations/moderate_reviews.sql on the hosted database, then reload this page.';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -63,6 +98,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $success = 'Property status updated.';
         } elseif ($action === 'verify_user') {
+            if (!$isFullAdmin) {
+                throw new Exception('Only admins can verify users directly.');
+            }
+
             $userId = (int)($_POST['user_id'] ?? 0);
             if (!$userId) {
                 throw new Exception('Invalid user.');
@@ -96,6 +135,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $success = $status === 'approved' ? 'Landlord verification approved.' : 'Landlord verification rejected.';
         } elseif ($action === 'user_role') {
+            if (!$isFullAdmin) {
+                throw new Exception('Only admins can change user roles.');
+            }
+
             $userId = (int)($_POST['user_id'] ?? 0);
             $role = $_POST['role'] ?? '';
 
@@ -113,6 +156,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $success = 'User role updated.';
         } elseif ($action === 'booking_status') {
+            if (!$isFullAdmin) {
+                throw new Exception('Only admins can update booking statuses.');
+            }
+
             $bookingId = (int)($_POST['booking_id'] ?? 0);
             $status = $_POST['status'] ?? '';
 
@@ -125,6 +172,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute();
 
             $success = 'Booking status updated.';
+        } elseif ($action === 'platform_review_status') {
+            $reviewId = (int)($_POST['review_id'] ?? 0);
+            $status = $_POST['status'] ?? '';
+
+            if (!$reviewId || !in_array($status, ['approved', 'rejected'], true)) {
+                throw new Exception('Invalid platform review request.');
+            }
+
+            if (!$hasPlatformReviewStatus) {
+                throw new Exception('Run the review moderation database update before approving platform reviews.');
+            }
+
+            $stmt = $conn->prepare("UPDATE platform_reviews SET status = ? WHERE id = ?");
+            if (!$stmt) {
+                throw new Exception('Database query failed: ' . $conn->error);
+            }
+            $stmt->bind_param("si", $status, $reviewId);
+            $stmt->execute();
+
+            $success = $status === 'approved' ? 'Review approved' : 'Review rejected';
+        } elseif ($action === 'property_review_status') {
+            $reviewId = (int)($_POST['review_id'] ?? 0);
+            $status = $_POST['status'] ?? '';
+
+            if (!$reviewId || !in_array($status, ['approved', 'rejected'], true)) {
+                throw new Exception('Invalid property review request.');
+            }
+
+            if (!$hasPropertyReviewStatus) {
+                throw new Exception('Run the review moderation database update before approving property reviews.');
+            }
+
+            $stmt = $conn->prepare("SELECT property_id FROM reviews WHERE id = ?");
+            if (!$stmt) {
+                throw new Exception('Database query failed: ' . $conn->error);
+            }
+            $stmt->bind_param("i", $reviewId);
+            $stmt->execute();
+            $review = $stmt->get_result()->fetch_assoc();
+
+            if (!$review) {
+                throw new Exception('Review not found.');
+            }
+
+            $stmt = $conn->prepare("UPDATE reviews SET status = ? WHERE id = ?");
+            if (!$stmt) {
+                throw new Exception('Database query failed: ' . $conn->error);
+            }
+            $stmt->bind_param("si", $status, $reviewId);
+            $stmt->execute();
+
+            $stmt = $conn->prepare("
+                UPDATE properties
+                SET rating = COALESCE((SELECT AVG(rating) FROM reviews WHERE property_id = ? AND status = 'approved'), 0),
+                    review_count = (SELECT COUNT(*) FROM reviews WHERE property_id = ? AND status = 'approved')
+                WHERE id = ?
+            ");
+            if (!$stmt) {
+                throw new Exception('Database query failed: ' . $conn->error);
+            }
+            $propertyId = (int)$review['property_id'];
+            $stmt->bind_param("iii", $propertyId, $propertyId, $propertyId);
+            $stmt->execute();
+
+            $success = $status === 'approved' ? 'Review approved' : 'Review rejected';
         }
     } catch (Exception $e) {
         $error = $e->getMessage();
@@ -132,71 +244,121 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $stats = [
-    'users' => (int)fetchOne($conn, "SELECT COUNT(*) AS count FROM users")['count'],
-    'landlords' => (int)fetchOne($conn, "SELECT COUNT(*) AS count FROM users WHERE role = 'landlord'")['count'],
-    'students' => (int)fetchOne($conn, "SELECT COUNT(*) AS count FROM users WHERE role = 'student'")['count'],
-    'properties' => (int)fetchOne($conn, "SELECT COUNT(*) AS count FROM properties")['count'],
-    'pending_properties' => (int)fetchOne($conn, "SELECT COUNT(*) AS count FROM properties WHERE verification_status = 'pending'")['count'],
-    'pending_user_verifications' => (int)fetchOne($conn, "SELECT COUNT(*) AS count FROM verification_requests WHERE request_type = 'user' AND status = 'pending'")['count'],
-    'bookings' => (int)fetchOne($conn, "SELECT COUNT(*) AS count FROM bookings")['count'],
-    'pending_bookings' => (int)fetchOne($conn, "SELECT COUNT(*) AS count FROM bookings WHERE status = 'pending'")['count'],
-    'completed_payments' => (float)(fetchOne($conn, "SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE status = 'completed'")['total'] ?? 0),
+    'users' => 0,
+    'landlords' => 0,
+    'students' => 0,
+    'properties' => 0,
+    'pending_properties' => 0,
+    'pending_user_verifications' => 0,
+    'pending_platform_reviews' => 0,
+    'pending_user_reviews' => 0,
+    'bookings' => 0,
+    'pending_bookings' => 0,
+    'completed_payments' => 0,
 ];
+$pendingProperties = [];
+$pendingUserRequests = [];
+$pendingPlatformReviews = [];
+$pendingUserReviews = [];
+$allProperties = [];
+$users = [];
+$bookings = [];
+$recentReviews = [];
 
-$pendingProperties = fetchAll($conn, "
-    SELECT p.id, p.name, p.address, p.city, p.price_per_month, p.image_urls, p.created_at,
-           u.first_name, u.last_name, u.email
-    FROM properties p
-    LEFT JOIN users u ON p.landlord_id = u.id
-    WHERE p.verification_status = 'pending'
-    ORDER BY p.created_at DESC
-    LIMIT 12
-");
+try {
+    $stats = [
+        'users' => (int)fetchOne($conn, "SELECT COUNT(*) AS count FROM users")['count'],
+        'landlords' => (int)fetchOne($conn, "SELECT COUNT(*) AS count FROM users WHERE role = 'landlord'")['count'],
+        'students' => (int)fetchOne($conn, "SELECT COUNT(*) AS count FROM users WHERE role = 'student'")['count'],
+        'properties' => (int)fetchOne($conn, "SELECT COUNT(*) AS count FROM properties")['count'],
+        'pending_properties' => (int)fetchOne($conn, "SELECT COUNT(*) AS count FROM properties WHERE verification_status = 'pending'")['count'],
+        'pending_user_verifications' => (int)fetchOne($conn, "SELECT COUNT(*) AS count FROM verification_requests WHERE request_type = 'user' AND status = 'pending'")['count'],
+        'pending_platform_reviews' => $hasPlatformReviewStatus ? (int)fetchOne($conn, "SELECT COUNT(*) AS count FROM platform_reviews WHERE status = 'pending'")['count'] : 0,
+        'pending_user_reviews' => $hasPropertyReviewStatus ? (int)fetchOne($conn, "SELECT COUNT(*) AS count FROM reviews WHERE status = 'pending'")['count'] : 0,
+        'bookings' => (int)fetchOne($conn, "SELECT COUNT(*) AS count FROM bookings")['count'],
+        'pending_bookings' => (int)fetchOne($conn, "SELECT COUNT(*) AS count FROM bookings WHERE status = 'pending'")['count'],
+        'completed_payments' => (float)(fetchOne($conn, "SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE status = 'completed'")['total'] ?? 0),
+    ];
 
-$pendingUserRequests = fetchAll($conn, "
-    SELECT vr.id, vr.user_id, vr.document_urls, vr.created_at, u.first_name, u.last_name, u.email, u.role
-    FROM verification_requests vr
-    LEFT JOIN users u ON vr.user_id = u.id
-    WHERE vr.request_type = 'user' AND vr.status = 'pending'
-    ORDER BY vr.created_at DESC
-    LIMIT 12
-");
+    $pendingProperties = fetchAll($conn, "
+        SELECT p.id, p.name, p.address, p.city, p.price_per_month, p.image_urls, p.created_at,
+               u.first_name, u.last_name, u.email
+        FROM properties p
+        LEFT JOIN users u ON p.landlord_id = u.id
+        WHERE p.verification_status = 'pending'
+        ORDER BY p.created_at DESC
+        LIMIT 12
+    ");
 
-$allProperties = fetchAll($conn, "
-    SELECT p.id, p.name, p.city, p.price_per_month, p.verification_status, p.created_at,
-           u.first_name, u.last_name
-    FROM properties p
-    LEFT JOIN users u ON p.landlord_id = u.id
-    ORDER BY p.created_at DESC
-    LIMIT 25
-");
+    $pendingUserRequests = fetchAll($conn, "
+        SELECT vr.id, vr.user_id, vr.document_urls, vr.created_at, u.first_name, u.last_name, u.email, u.role
+        FROM verification_requests vr
+        LEFT JOIN users u ON vr.user_id = u.id
+        WHERE vr.request_type = 'user' AND vr.status = 'pending'
+        ORDER BY vr.created_at DESC
+        LIMIT 12
+    ");
 
-$users = fetchAll($conn, "
-    SELECT id, email, first_name, last_name, role, is_verified, created_at
-    FROM users
-    ORDER BY created_at DESC
-    LIMIT 30
-");
+    $pendingPlatformReviews = $hasPlatformReviewStatus ? fetchAll($conn, "
+        SELECT pr.id, pr.rating, pr.title, pr.comment, pr.user_role, pr.created_at,
+               u.first_name, u.last_name, u.email
+        FROM platform_reviews pr
+        LEFT JOIN users u ON pr.user_id = u.id
+        WHERE pr.status = 'pending'
+        ORDER BY pr.created_at ASC
+        LIMIT 12
+    ") : [];
 
-$bookings = fetchAll($conn, "
-    SELECT b.id, b.status, b.total_price, b.check_in_date, b.check_out_date, b.created_at,
-           p.name AS property_name,
-           u.first_name, u.last_name, u.email
-    FROM bookings b
-    LEFT JOIN properties p ON b.property_id = p.id
-    LEFT JOIN users u ON b.student_id = u.id
-    ORDER BY b.created_at DESC
-    LIMIT 25
-");
+    $pendingUserReviews = $hasPropertyReviewStatus ? fetchAll($conn, "
+        SELECT r.id, r.rating, r.title, r.comment, r.created_at,
+               p.name AS property_name,
+               u.first_name, u.last_name, u.email
+        FROM reviews r
+        LEFT JOIN properties p ON r.property_id = p.id
+        LEFT JOIN users u ON r.reviewer_id = u.id
+        WHERE r.status = 'pending'
+        ORDER BY r.created_at ASC
+        LIMIT 12
+    ") : [];
 
-$recentReviews = fetchAll($conn, "
-    SELECT r.rating, r.title, r.created_at, p.name AS property_name, u.first_name, u.last_name
-    FROM reviews r
-    LEFT JOIN properties p ON r.property_id = p.id
-    LEFT JOIN users u ON r.reviewer_id = u.id
-    ORDER BY r.created_at DESC
-    LIMIT 8
-");
+    $allProperties = fetchAll($conn, "
+        SELECT p.id, p.name, p.city, p.price_per_month, p.verification_status, p.created_at,
+               u.first_name, u.last_name
+        FROM properties p
+        LEFT JOIN users u ON p.landlord_id = u.id
+        ORDER BY p.created_at DESC
+        LIMIT 25
+    ");
+
+    $users = fetchAll($conn, "
+        SELECT id, email, first_name, last_name, role, is_verified, created_at
+        FROM users
+        ORDER BY created_at DESC
+        LIMIT 30
+    ");
+
+    $bookings = fetchAll($conn, "
+        SELECT b.id, b.status, b.total_price, b.check_in_date, b.check_out_date, b.created_at,
+               p.name AS property_name,
+               u.first_name, u.last_name, u.email
+        FROM bookings b
+        LEFT JOIN properties p ON b.property_id = p.id
+        LEFT JOIN users u ON b.student_id = u.id
+        ORDER BY b.created_at DESC
+        LIMIT 25
+    ");
+
+    $recentReviews = fetchAll($conn, "
+        SELECT r.rating, r.title, " . ($hasPropertyReviewStatus ? "r.status" : "'approved' AS status") . ", r.created_at, p.name AS property_name, u.first_name, u.last_name
+        FROM reviews r
+        LEFT JOIN properties p ON r.property_id = p.id
+        LEFT JOIN users u ON r.reviewer_id = u.id
+        ORDER BY r.created_at DESC
+        LIMIT 8
+    ");
+} catch (Exception $e) {
+    $error = 'Admin dashboard database error: ' . $e->getMessage();
+}
 
 require_once '../templates/header.php';
 ?>
@@ -435,8 +597,8 @@ require_once '../templates/header.php';
 <div class="admin-page">
     <section class="admin-hero">
         <div>
-            <h1>Admin Dashboard</h1>
-            <p>Review listings, manage users, monitor bookings, and keep CampusNest trustworthy.</p>
+            <h1><?php echo htmlspecialchars($dashboardTitle); ?></h1>
+            <p><?php echo $isFullAdmin ? 'Review listings, manage users, monitor bookings, and keep CampusNest trustworthy.' : 'Review listings, verify landlord requests, and moderate community reviews.'; ?></p>
         </div>
         <a href="<?php echo pageUrl('properties.php'); ?>" class="btn">View Public Listings</a>
     </section>
@@ -475,17 +637,27 @@ require_once '../templates/header.php';
             <div class="metric-label">Pending Landlord Verifications</div>
         </div>
         <div class="metric-card">
-            <div class="metric-value"><?php echo $stats['bookings']; ?></div>
-            <div class="metric-label">Bookings</div>
+            <div class="metric-value"><?php echo $stats['pending_platform_reviews']; ?></div>
+            <div class="metric-label">Pending Platform Reviews</div>
         </div>
         <div class="metric-card">
-            <div class="metric-value"><?php echo $stats['pending_bookings']; ?></div>
-            <div class="metric-label">Pending Bookings</div>
+            <div class="metric-value"><?php echo $stats['pending_user_reviews']; ?></div>
+            <div class="metric-label">Pending User Reviews</div>
         </div>
-        <div class="metric-card">
-            <div class="metric-value"><?php echo formatCurrency($stats['completed_payments']); ?></div>
-            <div class="metric-label">Completed Payments</div>
-        </div>
+        <?php if ($isFullAdmin): ?>
+            <div class="metric-card">
+                <div class="metric-value"><?php echo $stats['bookings']; ?></div>
+                <div class="metric-label">Bookings</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value"><?php echo $stats['pending_bookings']; ?></div>
+                <div class="metric-label">Pending Bookings</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value"><?php echo formatCurrency($stats['completed_payments']); ?></div>
+                <div class="metric-label">Completed Payments</div>
+            </div>
+        <?php endif; ?>
     </section>
 
     <div class="admin-layout">
@@ -535,6 +707,74 @@ require_once '../templates/header.php';
                                         <button type="submit" class="btn btn-danger btn-mini">Reject</button>
                                     </form>
                                 </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </section>
+
+            <section class="admin-panel">
+                <div class="panel-head">
+                    <h2>Pending Platform Reviews</h2>
+                    <span class="status-pill status-pending"><?php echo count($pendingPlatformReviews); ?> waiting</span>
+                </div>
+
+                <?php if (empty($pendingPlatformReviews)): ?>
+                    <p class="muted">No platform reviews are waiting for approval.</p>
+                <?php else: ?>
+                    <?php foreach ($pendingPlatformReviews as $review): ?>
+                        <div class="review-item">
+                            <strong><?php echo htmlspecialchars($review['title']); ?></strong>
+                            <div><?php echo (int)$review['rating']; ?>/5 <span class="muted"><?php echo htmlspecialchars(ucfirst($review['user_role'])); ?></span></div>
+                            <p><?php echo nl2br(htmlspecialchars($review['comment'])); ?></p>
+                            <span class="muted">by <?php echo htmlspecialchars(trim(($review['first_name'] ?? '') . ' ' . ($review['last_name'] ?? '')) ?: $review['email']); ?> - <?php echo formatDate($review['created_at']); ?></span>
+                            <div class="action-row" style="margin-top: 0.75rem;">
+                                <form method="post" class="inline-form">
+                                    <input type="hidden" name="action" value="platform_review_status">
+                                    <input type="hidden" name="review_id" value="<?php echo $review['id']; ?>">
+                                    <input type="hidden" name="status" value="approved">
+                                    <button type="submit" class="btn btn-success btn-mini">Approve</button>
+                                </form>
+                                <form method="post" class="inline-form">
+                                    <input type="hidden" name="action" value="platform_review_status">
+                                    <input type="hidden" name="review_id" value="<?php echo $review['id']; ?>">
+                                    <input type="hidden" name="status" value="rejected">
+                                    <button type="submit" class="btn btn-danger btn-mini">Reject</button>
+                                </form>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </section>
+
+            <section class="admin-panel">
+                <div class="panel-head">
+                    <h2>Pending User Reviews</h2>
+                    <span class="status-pill status-pending"><?php echo count($pendingUserReviews); ?> waiting</span>
+                </div>
+
+                <?php if (empty($pendingUserReviews)): ?>
+                    <p class="muted">No property reviews are waiting for approval.</p>
+                <?php else: ?>
+                    <?php foreach ($pendingUserReviews as $review): ?>
+                        <div class="review-item">
+                            <strong><?php echo htmlspecialchars($review['property_name'] ?? 'Unknown property'); ?></strong>
+                            <div><?php echo (int)$review['rating']; ?>/5 <span class="muted"><?php echo htmlspecialchars($review['title'] ?? 'Review'); ?></span></div>
+                            <p><?php echo nl2br(htmlspecialchars($review['comment'] ?? '')); ?></p>
+                            <span class="muted">by <?php echo htmlspecialchars(trim(($review['first_name'] ?? '') . ' ' . ($review['last_name'] ?? '')) ?: $review['email']); ?> - <?php echo formatDate($review['created_at']); ?></span>
+                            <div class="action-row" style="margin-top: 0.75rem;">
+                                <form method="post" class="inline-form">
+                                    <input type="hidden" name="action" value="property_review_status">
+                                    <input type="hidden" name="review_id" value="<?php echo $review['id']; ?>">
+                                    <input type="hidden" name="status" value="approved">
+                                    <button type="submit" class="btn btn-success btn-mini">Approve</button>
+                                </form>
+                                <form method="post" class="inline-form">
+                                    <input type="hidden" name="action" value="property_review_status">
+                                    <input type="hidden" name="review_id" value="<?php echo $review['id']; ?>">
+                                    <input type="hidden" name="status" value="rejected">
+                                    <button type="submit" class="btn btn-danger btn-mini">Reject</button>
+                                </form>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -596,111 +836,115 @@ require_once '../templates/header.php';
                 <?php endif; ?>
             </section>
 
-            <section class="admin-panel">
-                <div class="panel-head">
-                    <h2>User Management</h2>
-                </div>
+            <?php if ($isFullAdmin): ?>
+                <section class="admin-panel">
+                    <div class="panel-head">
+                        <h2>User Management</h2>
+                    </div>
 
-                <div class="table-responsive">
-                    <table class="admin-table">
-                        <thead>
-                            <tr>
-                                <th>User</th>
-                                <th>Role</th>
-                                <th>Status</th>
-                                <th>Joined</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($users as $user): ?>
+                    <div class="table-responsive">
+                        <table class="admin-table">
+                            <thead>
                                 <tr>
-                                    <td>
-                                        <strong><?php echo htmlspecialchars(trim($user['first_name'] . ' ' . $user['last_name'])); ?></strong><br>
-                                        <span class="muted"><?php echo htmlspecialchars($user['email']); ?></span>
-                                    </td>
-                                    <td>
-                                        <form method="post" class="inline-form">
-                                            <input type="hidden" name="action" value="user_role">
-                                            <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
-                                            <select name="role" <?php echo $user['id'] == $currentAdminId ? 'disabled' : ''; ?>>
-                                                <?php foreach (['student', 'landlord', 'committee', 'admin'] as $roleOption): ?>
-                                                    <option value="<?php echo $roleOption; ?>" <?php echo $user['role'] === $roleOption ? 'selected' : ''; ?>>
-                                                        <?php echo ucfirst($roleOption); ?>
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                            <?php if ($user['id'] != $currentAdminId): ?>
-                                                <button type="submit" class="btn btn-mini">Save</button>
-                                            <?php endif; ?>
-                                        </form>
-                                    </td>
-                                    <td>
-                                        <span class="status-pill <?php echo $user['is_verified'] ? 'status-verified' : 'status-pending'; ?>">
-                                            <?php echo $user['is_verified'] ? 'Verified' : 'Unverified'; ?>
-                                        </span>
-                                    </td>
-                                    <td><?php echo formatDate($user['created_at']); ?></td>
-                                    <td>
-                                        <?php if (!$user['is_verified']): ?>
-                                            <form method="post" class="inline-form">
-                                                <input type="hidden" name="action" value="verify_user">
-                                                <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
-                                                <button type="submit" class="btn btn-success btn-mini">Verify</button>
-                                            </form>
-                                        <?php else: ?>
-                                            <span class="muted">No action</span>
-                                        <?php endif; ?>
-                                    </td>
+                                    <th>User</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th>Joined</th>
+                                    <th>Actions</th>
                                 </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($users as $user): ?>
+                                    <tr>
+                                        <td>
+                                            <strong><?php echo htmlspecialchars(trim($user['first_name'] . ' ' . $user['last_name'])); ?></strong><br>
+                                            <span class="muted"><?php echo htmlspecialchars($user['email']); ?></span>
+                                        </td>
+                                        <td>
+                                            <form method="post" class="inline-form">
+                                                <input type="hidden" name="action" value="user_role">
+                                                <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
+                                                <select name="role" <?php echo $user['id'] == $currentAdminId ? 'disabled' : ''; ?>>
+                                                    <?php foreach (['student', 'landlord', 'committee', 'admin'] as $roleOption): ?>
+                                                        <option value="<?php echo $roleOption; ?>" <?php echo $user['role'] === $roleOption ? 'selected' : ''; ?>>
+                                                            <?php echo ucfirst($roleOption); ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                                <?php if ($user['id'] != $currentAdminId): ?>
+                                                    <button type="submit" class="btn btn-mini">Save</button>
+                                                <?php endif; ?>
+                                            </form>
+                                        </td>
+                                        <td>
+                                            <span class="status-pill <?php echo $user['is_verified'] ? 'status-verified' : 'status-pending'; ?>">
+                                                <?php echo $user['is_verified'] ? 'Verified' : 'Unverified'; ?>
+                                            </span>
+                                        </td>
+                                        <td><?php echo formatDate($user['created_at']); ?></td>
+                                        <td>
+                                            <?php if (!$user['is_verified']): ?>
+                                                <form method="post" class="inline-form">
+                                                    <input type="hidden" name="action" value="verify_user">
+                                                    <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
+                                                    <button type="submit" class="btn btn-success btn-mini">Verify</button>
+                                                </form>
+                                            <?php else: ?>
+                                                <span class="muted">No action</span>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            <?php endif; ?>
         </div>
 
         <aside class="admin-stack">
-            <section class="admin-panel">
-                <div class="panel-head">
-                    <h3>Recent Bookings</h3>
-                </div>
-                <div class="table-responsive">
-                    <table class="admin-table">
-                        <thead>
-                            <tr>
-                                <th>Booking</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($bookings as $booking): ?>
+            <?php if ($isFullAdmin): ?>
+                <section class="admin-panel">
+                    <div class="panel-head">
+                        <h3>Recent Bookings</h3>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="admin-table">
+                            <thead>
                                 <tr>
-                                    <td>
-                                        <strong><?php echo htmlspecialchars($booking['property_name'] ?? 'Unknown property'); ?></strong><br>
-                                        <span class="muted"><?php echo htmlspecialchars(trim($booking['first_name'] . ' ' . $booking['last_name'])); ?></span><br>
-                                        <span class="muted"><?php echo formatCurrency($booking['total_price']); ?></span>
-                                    </td>
-                                    <td>
-                                        <form method="post" class="inline-form">
-                                            <input type="hidden" name="action" value="booking_status">
-                                            <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
-                                            <select name="status">
-                                                <?php foreach (['pending', 'confirmed', 'cancelled', 'completed'] as $statusOption): ?>
-                                                    <option value="<?php echo $statusOption; ?>" <?php echo $booking['status'] === $statusOption ? 'selected' : ''; ?>>
-                                                        <?php echo ucfirst($statusOption); ?>
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                            <button type="submit" class="btn btn-mini">Save</button>
-                                        </form>
-                                    </td>
+                                    <th>Booking</th>
+                                    <th>Status</th>
                                 </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($bookings as $booking): ?>
+                                    <tr>
+                                        <td>
+                                            <strong><?php echo htmlspecialchars($booking['property_name'] ?? 'Unknown property'); ?></strong><br>
+                                            <span class="muted"><?php echo htmlspecialchars(trim($booking['first_name'] . ' ' . $booking['last_name'])); ?></span><br>
+                                            <span class="muted"><?php echo formatCurrency($booking['total_price']); ?></span>
+                                        </td>
+                                        <td>
+                                            <form method="post" class="inline-form">
+                                                <input type="hidden" name="action" value="booking_status">
+                                                <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
+                                                <select name="status">
+                                                    <?php foreach (['pending', 'confirmed', 'cancelled', 'completed'] as $statusOption): ?>
+                                                        <option value="<?php echo $statusOption; ?>" <?php echo $booking['status'] === $statusOption ? 'selected' : ''; ?>>
+                                                            <?php echo ucfirst($statusOption); ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                                <button type="submit" class="btn btn-mini">Save</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            <?php endif; ?>
 
             <section class="admin-panel">
                 <div class="panel-head">

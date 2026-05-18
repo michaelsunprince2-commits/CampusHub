@@ -51,7 +51,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($result['success']) {
-            $success = $existingReview ? 'Your review has been updated!' : 'Thank you for your review! We appreciate your feedback.';
+            $success = $existingReview
+                ? 'Your review has been updated and is awaiting admin approval.'
+                : 'Thank you for your review! It is awaiting admin approval before it appears publicly.';
             $existingReview = $reviewModel->getUserReview(getCurrentUserId());
         } else {
             $error = $result['message'];

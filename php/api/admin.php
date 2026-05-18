@@ -13,12 +13,17 @@ try {
             requireAuth(['admin', 'committee']);
 
             $stats = [];
-            foreach ([
+            $statQueries = [
                 'users' => "SELECT COUNT(*) AS count FROM users",
                 'properties' => "SELECT COUNT(*) AS count FROM properties",
-                'pending_properties' => "SELECT COUNT(*) AS count FROM properties WHERE verification_status = 'pending'",
-                'bookings' => "SELECT COUNT(*) AS count FROM bookings"
-            ] as $key => $query) {
+                'pending_properties' => "SELECT COUNT(*) AS count FROM properties WHERE verification_status = 'pending'"
+            ];
+
+            if (getCurrentUserRole() === 'admin') {
+                $statQueries['bookings'] = "SELECT COUNT(*) AS count FROM bookings";
+            }
+
+            foreach ($statQueries as $key => $query) {
                 $result = $conn->query($query)->fetch_assoc();
                 $stats[$key] = (int)($result['count'] ?? 0);
             }

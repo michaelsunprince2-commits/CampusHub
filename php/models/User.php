@@ -13,6 +13,26 @@ class User
         $this->conn = $conn;
     }
 
+    private function tableExists($tableName)
+    {
+        $stmt = $this->conn->prepare("
+            SELECT COUNT(*) AS count
+            FROM INFORMATION_SCHEMA.TABLES
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = ?
+        ");
+
+        if (!$stmt) {
+            return false;
+        }
+
+        $stmt->bind_param("s", $tableName);
+        $stmt->execute();
+        $result = $stmt->get_result()->fetch_assoc();
+
+        return (int)($result['count'] ?? 0) > 0;
+    }
+
     /**
      * Register a new user
      */
@@ -92,18 +112,30 @@ class User
      */
     public function getProfile($userId)
     {
-        $stmt = $this->conn->prepare("
-            SELECT u.*, 
-                   CASE 
-                       WHEN u.role = 'landlord' THEN (SELECT rating FROM landlord_profiles WHERE user_id = u.id)
-                       ELSE NULL
-                   END as rating
-            FROM users u 
-            WHERE u.id = ?
-        ");
+        $stmt = $this->conn->prepare("SELECT u.*, NULL AS rating FROM users u WHERE u.id = ?");
+        if (!$stmt) {
+            return null;
+        }
+
         $stmt->bind_param("i", $userId);
         $stmt->execute();
-        return $stmt->get_result()->fetch_assoc();
+        $profile = $stmt->get_result()->fetch_assoc();
+
+        if (!$profile) {
+            return null;
+        }
+
+        if (($profile['role'] ?? '') === 'landlord' && $this->tableExists('landlord_profiles')) {
+            $stmt = $this->conn->prepare("SELECT rating FROM landlord_profiles WHERE user_id = ? LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param("i", $userId);
+                $stmt->execute();
+                $landlordProfile = $stmt->get_result()->fetch_assoc();
+                $profile['rating'] = $landlordProfile['rating'] ?? null;
+            }
+        }
+
+        return $profile;
     }
 
     /**
